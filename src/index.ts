@@ -45,9 +45,42 @@ const entry = definePluginEntry({
       },
     } as never);
 
-    // Auto-engage: inject the GSD meta-prompt for coding-workspace turns (ENG-02).
+    // Opt-out (c) D-04: read the operator-set host plugin config (read-only). The accessor is
+    // surfaced as `pluginConfig?: Record<string, unknown>` (registry-types-bnUgkf2q.d.ts:190 /
+    // types-Tcpca_5M.d.ts:8127). Read defensively without asserting an invented method; the plugin
+    // NEVER writes host config (R0.3 — never mutate ~/.openclaw/openclaw.json).
+    const pluginConfig = (api as { pluginConfig?: Record<string, unknown> }).pluginConfig;
+
+    // Opt-out (b) D-03 scaffold: register the session-extension slot so the toggle has a home.
+    // LIMITATION (documented, not faked): the before_prompt_build ctx is a PluginHookAgentContext
+    // (hook-types-C-yXhapS.d.ts:368-388) with NO getSessionExtension reader — that reader lives only
+    // on PluginHookToolContext (:686). So the toggle's LIVE read-back is not cleanly available in the
+    // prompt hook this release; `sessionDisabled` therefore stays unset from this hook path. Opt-outs
+    // (a) `.gsd-off` and (c) pluginConfig are authoritative. Full read-back is gateway-gated -> Phase 7.
+    const sessionState = (
+      api as {
+        session?: { state?: { registerSessionExtension?: (ext: unknown) => void } };
+      }
+    ).session?.state;
+    sessionState?.registerSessionExtension?.({
+      namespace: "gsd-oc",
+      description:
+        "Per-session GSD auto-engage toggle (parseToggle off/on). Read-back is gateway-gated (Phase 7); slot reserved.",
+      sessionEntrySlotKey: "gsdAutoEngageDisabled",
+    });
+
+    // Auto-engage: inject the GSD meta-prompt for coding-workspace turns (ENG-02), now gated by the
+    // D-05 composition (classifyIntent + optedOut). Pass the read-only pluginConfig through (opt-out c).
     // Uses api.registerHook (NOT api.on — api.on does not exist on the installed SDK).
-    api.registerHook("before_prompt_build", autoEngageHandler as never);
+    api.registerHook(
+      "before_prompt_build",
+      ((event: unknown, ctx: unknown) =>
+        autoEngageHandler(
+          event as Parameters<typeof autoEngageHandler>[0],
+          ctx as Parameters<typeof autoEngageHandler>[1],
+          { pluginConfig },
+        )) as never,
+    );
 
     // Auto-advance: the loop's cross-turn lever (ORCH-04). before_agent_finalize re-runs
     // route() and revises for a code-driven step, guarded by stopHookActive + maxAttempts.
