@@ -1,5 +1,7 @@
 import { homedir } from "node:os";
 import { resolve, sep } from "node:path";
+import { classifyIntent } from "../engage/classify.js";
+import { optedOut } from "../engage/opt-out.js";
 
 /**
  * Event/context shapes for the `before_prompt_build` hook
@@ -42,17 +44,44 @@ export const GSD_META_PROMPT = [
   "target project directory. Do not require the user to type GSD slash-commands.",
 ].join(" ");
 
+/** Opt-out signals injected by the registration site (index.ts); defaults preserve Phase-1 behavior. */
+export type AutoEngageDeps = {
+  pluginConfig?: Record<string, unknown>;
+  sessionDisabled?: boolean;
+};
+
 /**
- * `before_prompt_build` handler (ENG-02). Fires only when the turn's workspace is a coding
- * workspace; otherwise returns void (no injection) so trivial chat is never hijacked.
+ * `before_prompt_build` handler — the D-05 composition (ENG-01/ENG-03/ENG-04):
+ *
+ *   engage = isCodingWorkspace(ctx.workspaceDir)   // ENG-02 codeWS gate (Phase 1)
+ *         && classifyIntent(event.prompt).engage   // ENG-01 intent gate
+ *         && !optedOut({ cwd, pluginConfig, sessionDisabled })   // ENG-03 opt-outs
+ *
+ * Returns the GSD meta-prompt injection only when all signals agree; otherwise void so trivial
+ * chat is never hijacked (ENG-04 negative). The optional `deps` arg keeps the Phase-1 two-arg
+ * call signature behaving identically when no opt-out applies.
+ *
+ * Opt-out (b) — per-session toggle — LIMITATION (D-03 fallback): the before_prompt_build ctx is a
+ * PluginHookAgentContext (hook-types-C-yXhapS.d.ts:368-388) and exposes NO getSessionExtension
+ * reader; that reader lives only on PluginHookToolContext (hook-types-C-yXhapS.d.ts:686). So the
+ * toggle's LIVE read-back is NOT cleanly available in this hook. Opt-out (a) `.gsd-off` marker and
+ * (c) host pluginConfig are authoritative here; the toggle is carried via the injected
+ * `sessionDisabled` flag (parseToggle + the registration scaffold in index.ts), NOT a faked ctx
+ * read. Full toggle read-back is gateway-gated -> revisit in Phase 7.
  *
  * Operator gate: requires `plugins.entries.gsd-oc.hooks.allowPromptInjection: true`
  * (documented in README; the plugin never mutates host config).
  */
 export function autoEngageHandler(
-  _event: BeforePromptBuildEvent,
+  event: BeforePromptBuildEvent,
   ctx: BeforePromptBuildContext,
+  deps: AutoEngageDeps = {},
 ): BeforePromptBuildResult | void {
-  if (!isCodingWorkspace(ctx?.workspaceDir)) return;
+  const cwd = ctx?.workspaceDir ?? process.cwd();
+  const engage =
+    isCodingWorkspace(ctx?.workspaceDir) &&
+    classifyIntent(event.prompt).engage &&
+    !optedOut({ cwd, pluginConfig: deps.pluginConfig, sessionDisabled: deps.sessionDisabled });
+  if (!engage) return;
   return { prependSystemContext: GSD_META_PROMPT };
 }
