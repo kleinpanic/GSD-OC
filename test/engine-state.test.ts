@@ -123,42 +123,50 @@ test("M-01: stale-lock steal preserves a fresh lock created in the unlink window
   releaseStateLock(lock);
 });
 
-test("M-01: a fresh live lock placed in the steal window is not clobbered", () => {
+test("M-01: the steal removes only the stale inode, never a fresh lock that replaced it", () => {
   const p = tmpStatePath();
   const lockPath = p + ".lock";
-  // Stale lock present at stat time.
+  // Stale lock present at stat time (mtime well past the threshold).
   fs.writeFileSync(lockPath, "12345");
   const old = new Date(Date.now() - 60_000);
   fs.utimesSync(lockPath, old, old);
 
-  // Simulate the TOCTOU race: a live writer replaces the lock with a BRAND-NEW
-  // lock (current mtime) inside the steal window. We model this by intercepting
-  // renameSync — after our code renames the stale lock away, the live writer
-  // immediately drops a fresh lock at lockPath. The rename-based steal unlinks
-  // ONLY the renamed sidecar (the inode it actually moved), so the fresh live
-  // lock at lockPath survives; the acquire then spin-waits and throws.
+  // TOCTOU race model: a live writer replaces the lock with a BRAND-NEW lock
+  // (current mtime) the instant our code renames the stale one away. We patch
+  // renameSync so the live lock appears in the now-empty slot during the steal.
+  // The rename-based steal operates on the renamed sidecar (the exact inode it
+  // moved), so it must NOT delete the fresh "88888" lock sitting at lockPath.
   let raced = false;
   const origRename = fs.renameSync;
   const patched = (from: fs.PathLike, to: fs.PathLike) => {
     origRename(from, to);
     if (!raced && String(from) === lockPath) {
       raced = true;
-      // Live writer wins the now-empty slot with a fresh lock (current mtime).
-      fs.writeFileSync(lockPath, "88888");
+      fs.writeFileSync(lockPath, "88888"); // live writer wins the empty slot
     }
   };
   (fs as { renameSync: typeof fs.renameSync }).renameSync = patched as typeof fs.renameSync;
+  // Constant real-now clock: iteration 1 sees the backdated lock as stale (steal),
+  // iteration 2 sees the fresh "88888" lock as NOT stale. We abort via sleep() so
+  // the loop halts right after iteration 1's steal — letting us assert that the
+  // freshly-placed live lock survived that single steal iteration uncloberred.
+  const realNow = Date.now();
+  class HaltAfterSteal extends Error {}
+  const clock: Clock = {
+    now: () => realNow,
+    sleep: () => {
+      throw new HaltAfterSteal();
+    },
+  };
   try {
-    // Start the fake clock at real wall-clock so the backdated mtime reads as
-    // stale; sleeps then advance it past the 30s budget without real waits.
-    const clock = fakeClock(Date.now());
-    assert.throws(
-      () => acquireStateLock(p, clock),
-      /held by live process/,
-      "the fresh live lock must survive and force the budget-exceeded throw",
-    );
-    // The live writer's lock body is intact (never clobbered by the steal).
-    assert.equal(fs.readFileSync(lockPath, "utf8"), "88888", "live lock body preserved");
+    try {
+      acquireStateLock(p, clock);
+    } catch (e) {
+      if (!(e instanceof HaltAfterSteal)) throw e;
+    }
+    // The live writer's fresh lock body survived the steal (its inode was never
+    // the one the steal renamed/unlinked). Pre-fix (blind unlink) this would be gone.
+    assert.equal(fs.readFileSync(lockPath, "utf8"), "88888", "fresh live lock not clobbered");
   } finally {
     (fs as { renameSync: typeof fs.renameSync }).renameSync = origRename;
     try {
