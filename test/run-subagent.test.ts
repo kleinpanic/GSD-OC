@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runSubagent, type RunSubagentApi } from "../src/dispatch/run-subagent.js";
+import { runSubagent, extractAssistantText, type RunSubagentApi } from "../src/dispatch/run-subagent.js";
 
 /** A mock subagent runtime that records calls and returns a canned transcript. */
 function mockApi(): { api: RunSubagentApi; calls: Record<string, unknown[]> } {
@@ -52,4 +52,43 @@ test("runSubagent surfaces a timeout without throwing", async () => {
   const res = await runSubagent(api, "gsd-planner", "plan it");
   assert.equal(res.status, "timeout");
   assert.equal(res.text, "");
+});
+
+// ── L-03: distinguish parser drift ("no text parsed") from a genuine empty reply ──
+
+test("L-03: extractAssistantText flags a string/array reply as parsed", () => {
+  assert.deepEqual(extractAssistantText([{ role: "assistant", content: "hi" }]), {
+    text: "hi",
+    parsed: true,
+  });
+  // A recognized array-of-parts assistant message that is genuinely empty:
+  // parsed:true, text:"" — the agent said nothing, NOT parser drift.
+  assert.deepEqual(extractAssistantText([{ role: "assistant", content: [] }]), {
+    text: "",
+    parsed: true,
+  });
+});
+
+test("L-03: an unrecognized assistant content shape is parsed:false (parser drift)", () => {
+  // Tool-result-only / {type,value} shape the extractor does not understand.
+  assert.deepEqual(
+    extractAssistantText([{ role: "assistant", content: { type: "text", value: "x" } }]),
+    { text: "", parsed: false },
+  );
+  // No assistant message at all → also parser-cannot-tell.
+  assert.deepEqual(extractAssistantText([{ role: "user", content: "hi" }]), {
+    text: "",
+    parsed: false,
+  });
+});
+
+test("L-03: runSubagent surfaces the parsed flag so callers tell empty from undecodable", async () => {
+  const { api } = mockApi();
+  api.runtime.subagent.getSessionMessages = async () => ({
+    messages: [{ role: "assistant", content: { type: "text", value: "drift" } }],
+  });
+  const res = await runSubagent(api, "gsd-planner", "go");
+  assert.equal(res.status, "ok");
+  assert.equal(res.text, "");
+  assert.equal(res.parsed, false, "undecodable assistant shape must report parsed:false");
 });
