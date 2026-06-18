@@ -52,7 +52,7 @@ export type RunSubagentResult = {
  * (typed `unknown[]`, OR-3). We do NOT hand-roll a session format — we inspect common
  * message shapes ({ role, content }) and fall back to "".
  */
-function extractAssistantText(messages: unknown[]): string {
+export function extractAssistantText(messages: unknown[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     if (m && typeof m === "object" && (m as { role?: unknown }).role === "assistant") {
