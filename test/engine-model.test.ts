@@ -43,3 +43,28 @@ test("unknown profile falls back to balanced", () => {
 test("unknown agent with no override resolves to null", () => {
   assert.equal(resolveModel("gsd-nonexistent", { model_profile: "balanced" }), null);
 });
+
+test("M-03: an empty-string override is treated as absent (falls through to tier)", () => {
+  const cfg = {
+    model_profile: "balanced",
+    model_profile_overrides: { "gsd-planner": "" },
+  };
+  // "" must NOT win — fall through to balanced → opus for gsd-planner.
+  assert.equal(resolveModel("gsd-planner", cfg), "opus");
+});
+
+test("M-03: an unknown override tier falls through to profile resolution", () => {
+  const cfg = {
+    model_profile: "budget",
+    model_profile_overrides: { "gsd-planner": "gpt-bananas" },
+  };
+  // Unrecognized tier is ignored → budget → sonnet for gsd-planner.
+  assert.equal(resolveModel("gsd-planner", cfg), "sonnet");
+});
+
+test("M-03: a valid override tier still wins (incl. inherit)", () => {
+  assert.equal(
+    resolveModel("gsd-planner", { model_profile: "balanced", model_profile_overrides: { "gsd-planner": "inherit" } }),
+    "inherit",
+  );
+});
