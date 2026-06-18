@@ -3,3 +3,6 @@ dist/
 *.log
 .DS_Store
 .remember/
+
+# reference substrate (kept on disk, not tracked)
+.planning/research/gsd-source/
