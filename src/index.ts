@@ -7,9 +7,6 @@ import { runSubagent, type RunSubagentApi } from "./dispatch/run-subagent.js";
 import { readState } from "./state/read-state.js";
 import { routerMetadataTools } from "./routers/routers.js";
 import { buildWiredRouterTools } from "./routers/route-wire.js";
-import { registerGateInteractiveHandler } from "./gates/resume.js";
-import type { NextTurnInjectionApi } from "./orchestrate/inject.js";
-import type { GsdGate } from "./gates/types.js";
 
 const PLUGIN_ID = "gsd-oc";
 const PLUGIN_NAME = "GSD-OC";
@@ -122,27 +119,19 @@ const entry = definePluginEntry({
       api.registerTool(router as never);
     }
 
-    // GATE-05 / D-05: register the gate resume interactive handler defensively. The accessor is
-    // guarded (matches the pluginConfig/session.state style above) so it is inert when the host
-    // does not expose registerInteractiveHandler — `openclaw plugins validate` stays green because
-    // this is runtime-only registration (NO new tool/command added → 0-slot invariant, RTE-03).
+    // GATE-05 / D-05: the gate resume interactive handler is PHASE-7 SCAFFOLD — deliberately
+    // NOT registered yet (L-04). The two pieces that make it functional — a live pending-gate
+    // mirror and the real interaction-time sessionKey — only exist once the gateway round-trip
+    // lands (TEST-02). Registering it now with the only values available here (sessionKey:""
+    // and an empty-choices pending stub) would produce a handler that ALWAYS default-denies
+    // (validateGateChoice false) yet still claims the "gsd-gate" namespace — a no-op handler
+    // that could swallow real interactions and mask the absence of a working gate path in
+    // integration. We therefore keep registration deferred rather than ship inert live behavior.
     //
-    // LIMITATION (documented, not faked): the live pending-gate + sessionKey arrive at interaction
-    // time. A live pending-gate mirror via the session extension is gateway-gated → Phase 7. The
-    // plumbing is unit-proven (test/gate-resume.test.ts); the LIVE round-trip is Phase 7 (TEST-02).
-    const registerInteractiveHandler = (
-      api as { registerInteractiveHandler?: (reg: unknown) => void }
-    ).registerInteractiveHandler;
-    if (typeof registerInteractiveHandler === "function") {
-      const pendingGateStub: GsdGate = { id: "gsd-gate", kind: "binary", title: "GSD gate", choices: [] };
-      registerInteractiveHandler(
-        registerGateInteractiveHandler({
-          api: api as unknown as NextTurnInjectionApi,
-          sessionKey: "",
-          pending: pendingGateStub,
-        }),
-      );
-    }
+    // The plumbing itself is fully unit-proven today (registerGateInteractiveHandler in
+    // src/gates/resume.ts, test/gate-resume.test.ts); only the host wiring is gated. Phase 7
+    // replaces this block with a registration that passes the live pending gate + the
+    // interaction-time sessionKey (and imports registerGateInteractiveHandler then).
 
     // runSubagent is the code-driven dispatch helper exercised by the orchestrator tool
     // and the loop (Phase 4). Referenced here to keep the wiring explicit.
