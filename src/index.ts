@@ -2,6 +2,7 @@ import { definePluginEntry } from "openclaw/plugin-sdk/core";
 import { toolPluginMetadataSymbol } from "openclaw/plugin-sdk/tool-plugin";
 import { Type } from "typebox";
 import { autoEngageHandler } from "./hooks/auto-engage.js";
+import { autoAdvanceHandler } from "./hooks/auto-advance.js";
 import { runSubagent, type RunSubagentApi } from "./dispatch/run-subagent.js";
 import { readState } from "./state/read-state.js";
 import { buildRouterTools, routerMetadataTools } from "./routers/routers.js";
@@ -39,13 +40,19 @@ const entry = definePluginEntry({
       id: PLUGIN_ID,
       description: "GSD-OC lifecycle service",
       async start() {
-        /* Phase 1: no background work; the loop service lands in Phase 4. */
+        /* The loop is hook-driven (D-04/D-05): advance runs via the before_agent_finalize
+         * hook + code-driven fan-out, so no background service work is needed. */
       },
     } as never);
 
     // Auto-engage: inject the GSD meta-prompt for coding-workspace turns (ENG-02).
     // Uses api.registerHook (NOT api.on — api.on does not exist on the installed SDK).
     api.registerHook("before_prompt_build", autoEngageHandler as never);
+
+    // Auto-advance: the loop's cross-turn lever (ORCH-04). before_agent_finalize re-runs
+    // route() and revises for a code-driven step, guarded by stopHookActive + maxAttempts.
+    // Inert unless the operator sets hooks.allowConversationAccess (README; never mutated).
+    api.registerHook("before_agent_finalize", autoAdvanceHandler as never);
 
     // Orchestrator tool: code-driven dispatch entry point (ORCH-01 / AGT-02).
     api.registerTool({
