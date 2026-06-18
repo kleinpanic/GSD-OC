@@ -57,6 +57,11 @@ export const ROUTERS: RouterDef[] = [
   },
 ];
 
+/**
+ * Static intent-match result. The AUTHORITATIVE state-aware `next_verb` is computed by the
+ * native route() engine — see src/routers/route-wire.ts (wireRouterExecute), which returns
+ * { namespace, next_verb, reason, args }. `matched` here is only the static-table fallback.
+ */
 export type RouteHit = {
   namespace: string;
   candidates: string[];
