@@ -6,6 +6,9 @@ import { autoAdvanceHandler } from "./hooks/auto-advance.js";
 import { runSubagent, type RunSubagentApi } from "./dispatch/run-subagent.js";
 import { readState } from "./state/read-state.js";
 import { buildRouterTools, routerMetadataTools } from "./routers/routers.js";
+import { registerGateInteractiveHandler } from "./gates/resume.js";
+import type { NextTurnInjectionApi } from "./orchestrate/inject.js";
+import type { GsdGate } from "./gates/types.js";
 
 const PLUGIN_ID = "gsd-oc";
 const PLUGIN_NAME = "GSD-OC";
@@ -108,6 +111,28 @@ const entry = definePluginEntry({
     // R0.4 Tier-1: register the 6 namespace router tools (zero Discord slash slots).
     for (const router of buildRouterTools()) {
       api.registerTool(router as never);
+    }
+
+    // GATE-05 / D-05: register the gate resume interactive handler defensively. The accessor is
+    // guarded (matches the pluginConfig/session.state style above) so it is inert when the host
+    // does not expose registerInteractiveHandler — `openclaw plugins validate` stays green because
+    // this is runtime-only registration (NO new tool/command added → 0-slot invariant, RTE-03).
+    //
+    // LIMITATION (documented, not faked): the live pending-gate + sessionKey arrive at interaction
+    // time. A live pending-gate mirror via the session extension is gateway-gated → Phase 7. The
+    // plumbing is unit-proven (test/gate-resume.test.ts); the LIVE round-trip is Phase 7 (TEST-02).
+    const registerInteractiveHandler = (
+      api as { registerInteractiveHandler?: (reg: unknown) => void }
+    ).registerInteractiveHandler;
+    if (typeof registerInteractiveHandler === "function") {
+      const pendingGateStub: GsdGate = { id: "gsd-gate", kind: "binary", title: "GSD gate", choices: [] };
+      registerInteractiveHandler(
+        registerGateInteractiveHandler({
+          api: api as unknown as NextTurnInjectionApi,
+          sessionKey: "",
+          pending: pendingGateStub,
+        }),
+      );
     }
 
     // runSubagent is the code-driven dispatch helper exercised by the orchestrator tool
