@@ -71,3 +71,9 @@ test("nextDecimalPhase computes N.(max+1) and N.1 when none exist", () => {
   // no decimal dirs under base 1 → 1.1
   assert.equal(nextDecimalPhase(fixture, "1"), "1.1");
 });
+
+test("L-02: nextDecimalPhase throws on a decimal basePhase instead of silently rebasing", () => {
+  // Pre-fix: "2.3" was parseInt'd to 2, silently computing children of phase 2.
+  assert.throws(() => nextDecimalPhase(fixture, "2.3"), /must be an integer phase/);
+  assert.throws(() => nextDecimalPhase(fixture, "2.1"), /must be an integer phase/);
+});
