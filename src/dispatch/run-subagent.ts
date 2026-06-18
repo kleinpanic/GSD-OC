@@ -1,9 +1,17 @@
 import { buildAgentMainSessionKey } from "openclaw/plugin-sdk/routing";
+import { resolveAgentOptional } from "../agents/index.js";
 
 /**
  * Minimal structural view of the subagent runtime surface we use
- * (types-Tcpca_5M.d.ts:6364-6400). Declared locally so this module type-checks against
+ * (types-Tcpca_5M.d.ts:6364-6374). Declared locally so this module type-checks against
  * the installed SDK without depending on internal symbol paths.
+ *
+ * `extraSystemPrompt`/`lane` are the per-call persona+effort carriers (:6369-6370).
+ * There is intentionally NO `tools` field here: per the 03-01 spike
+ * (SPIKE-tool-enforcement.md, Outcome: NOT-ENFORCED-by-subagent.run), SubagentRunParams
+ * has no tool argument and the child inherits the parent session tool policy (:1578).
+ * Per-agent tool isolation is the Phase-4 sessions_spawn / SessionsSpawnToolsConfig
+ * route (types.tools-CGvqp937.d.ts:306/315/532, deny wins) — never claimed here.
  */
 export type SubagentRuntime = {
   run: (params: {
@@ -11,6 +19,8 @@ export type SubagentRuntime = {
     message: string;
     provider?: string;
     model?: string;
+    extraSystemPrompt?: string;
+    lane?: string;
     deliver?: boolean;
     idempotencyKey?: string;
   }) => Promise<{ runId: string }>;
@@ -78,7 +88,25 @@ export async function runSubagent(
   opts: { timeoutMs?: number; cleanup?: boolean } = {},
 ): Promise<RunSubagentResult> {
   const sessionKey = buildAgentMainSessionKey({ agentId });
-  const { runId } = await api.runtime.subagent.run({ sessionKey, message, deliver: false });
+
+  // D-04: inject the ported agent's persona per-call via extraSystemPrompt
+  // (types-Tcpca_5M.d.ts:6369). Unknown ids degrade to Phase-1 behavior (no persona),
+  // never throw — preserving the Phase-1 dispatch contract (T-03-06).
+  // @kp-verified: 2026-06-18 — phase 3 — extraSystemPrompt persona injection wired to
+  // SubagentRunParams:6369; lane carries effort tier (:6370). def.tools is NOT passed:
+  // per 03-01 spike (SPIKE-tool-enforcement.md, NOT-ENFORCED-by-subagent.run) the run
+  // path has no tool arg — tool isolation is the Phase-4 sessions_spawn route.
+  const def = resolveAgentOptional(agentId);
+  const runParams: Parameters<RunSubagentApi["runtime"]["subagent"]["run"]>[0] = {
+    sessionKey,
+    message,
+    deliver: false,
+  };
+  if (def) {
+    runParams.extraSystemPrompt = def.prompt;
+    runParams.lane = def.thinking; // effort/lane selector (A2); thinking tier 1:1
+  }
+  const { runId } = await api.runtime.subagent.run(runParams);
   const wait = await api.runtime.subagent.waitForRun({
     runId,
     timeoutMs: opts.timeoutMs ?? 120_000,
