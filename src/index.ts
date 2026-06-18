@@ -4,6 +4,7 @@ import { Type } from "typebox";
 import { autoEngageHandler } from "./hooks/auto-engage.js";
 import { runSubagent, type RunSubagentApi } from "./dispatch/run-subagent.js";
 import { readState } from "./state/read-state.js";
+import { buildRouterTools, routerMetadataTools } from "./routers/routers.js";
 
 const PLUGIN_ID = "gsd-oc";
 const PLUGIN_NAME = "GSD-OC";
@@ -64,6 +65,11 @@ const entry = definePluginEntry({
       },
     } as never);
 
+    // R0.4 Tier-1: register the 6 namespace router tools (zero Discord slash slots).
+    for (const router of buildRouterTools()) {
+      api.registerTool(router as never);
+    }
+
     // runSubagent is the code-driven dispatch helper exercised by the orchestrator tool
     // and the loop (Phase 4). Referenced here to keep the wiring explicit.
     void (runSubagent as (api: RunSubagentApi, agentId: string, message: string) => unknown);
@@ -90,6 +96,7 @@ Object.defineProperty(entry, toolPluginMetadataSymbol, {
           "Route a coding/big-work intent through the GSD lifecycle by dispatching the appropriate GSD subagent.",
         parameters: { type: "object", additionalProperties: false, properties: {} },
       },
+      ...routerMetadataTools(),
     ],
   },
   enumerable: false,

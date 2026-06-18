@@ -13,7 +13,13 @@
   },
   "contracts": {
     "tools": [
-      "gsd_orchestrate"
+      "gsd_orchestrate",
+      "gsd_workflow",
+      "gsd_project",
+      "gsd_quality",
+      "gsd_context",
+      "gsd_manage",
+      "gsd_ideate"
     ]
   }
 }
