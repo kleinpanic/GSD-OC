@@ -5,7 +5,8 @@ import { autoEngageHandler } from "./hooks/auto-engage.js";
 import { autoAdvanceHandler } from "./hooks/auto-advance.js";
 import { runSubagent, type RunSubagentApi } from "./dispatch/run-subagent.js";
 import { readState } from "./state/read-state.js";
-import { buildRouterTools, routerMetadataTools } from "./routers/routers.js";
+import { routerMetadataTools } from "./routers/routers.js";
+import { buildWiredRouterTools } from "./routers/route-wire.js";
 import { registerGateInteractiveHandler } from "./gates/resume.js";
 import type { NextTurnInjectionApi } from "./orchestrate/inject.js";
 import type { GsdGate } from "./gates/types.js";
@@ -115,7 +116,9 @@ const entry = definePluginEntry({
     } as never);
 
     // R0.4 Tier-1: register the 6 namespace router tools (zero Discord slash slots).
-    for (const router of buildRouterTools()) {
+    // RTE-01: register the WIRED builder so each router returns the state-aware authoritative
+    // next verb (native route('.planning')), not the static substring table (verifier finding).
+    for (const router of buildWiredRouterTools(".planning")) {
       api.registerTool(router as never);
     }
 
