@@ -35,6 +35,12 @@ const SKIP_CASES: string[] = [
   "what is a closure in JS?",
   "",
   "   ",
+  // L-01: incidental-keyword false-positives that must NOT auto-engage.
+  "explain the system call",
+  "what does the system call do",
+  "how does the event loop work",
+  "what do you think about rust",
+  "how do you make a closure in JS?",
 ];
 
 test("classifyIntent engages coding/big-work prompts (ENG-01)", () => {
