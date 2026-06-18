@@ -75,6 +75,9 @@ const entry = definePluginEntry({
     // Auto-engage: inject the GSD meta-prompt for coding-workspace turns (ENG-02), now gated by the
     // D-05 composition (classifyIntent + optedOut). Pass the read-only pluginConfig through (opt-out c).
     // Uses api.registerHook (NOT api.on — api.on does not exist on the installed SDK).
+    // NOTE: api.registerHook REQUIRES opts.name at runtime — the registry throws
+    // "hook registration missing name" otherwise (registry-B8gzOJBq.js:3082). Surfaced by a
+    // real gateway install (`openclaw plugins install`), not by unit tests / `plugins validate`.
     api.registerHook(
       "before_prompt_build",
       ((event: unknown, ctx: unknown) =>
@@ -83,12 +86,15 @@ const entry = definePluginEntry({
           ctx as Parameters<typeof autoEngageHandler>[1],
           { pluginConfig },
         )) as never,
+      { name: "gsd-oc:auto-engage" } as never,
     );
 
     // Auto-advance: the loop's cross-turn lever (ORCH-04). before_agent_finalize re-runs
     // route() and revises for a code-driven step, guarded by stopHookActive + maxAttempts.
     // Inert unless the operator sets hooks.allowConversationAccess (README; never mutated).
-    api.registerHook("before_agent_finalize", autoAdvanceHandler as never);
+    api.registerHook("before_agent_finalize", autoAdvanceHandler as never, {
+      name: "gsd-oc:auto-advance",
+    } as never);
 
     // Orchestrator tool: code-driven dispatch entry point (ORCH-01 / AGT-02).
     api.registerTool({
