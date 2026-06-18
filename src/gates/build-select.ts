@@ -1,3 +1,4 @@
+import { encodeGateCallback } from "./resume.js";
 import type { GsdGate, MessagePresentation } from "./types.js";
 
 /**
@@ -29,7 +30,7 @@ export function buildSelectGate(gate: GsdGate): MessagePresentation {
         ...(gate.placeholder ? { placeholder: gate.placeholder } : {}),
         options: choices.map((c) => ({
           label: c.label,
-          action: { type: "callback" as const, value: `${gate.id}:${c.id}` },
+          action: { type: "callback" as const, value: encodeGateCallback(gate.id, c.id) },
         })),
       },
     ],

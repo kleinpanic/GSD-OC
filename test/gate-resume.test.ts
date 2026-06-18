@@ -8,8 +8,11 @@ import {
   validateGateChoice,
   buildGateResumeText,
   registerGateInteractiveHandler,
+  encodeGateCallback,
   GateCallbackParseError,
 } from "../src/gates/resume.js";
+import { buildButtonsGate } from "../src/gates/build-buttons.js";
+import { buildSelectGate } from "../src/gates/build-select.js";
 import type { NextTurnInjectionApi } from "../src/orchestrate/inject.js";
 import type { GsdGate } from "../src/gates/types.js";
 
@@ -103,6 +106,40 @@ test("handler does NOT enqueue on an INVALID interaction (default-deny)", async 
   assert.deepEqual(await reg.handler(null), { handled: false });
   assert.deepEqual(await reg.handler({ value: "other:yes" }), { handled: false });
   assert.equal(calls.length, 0);
+});
+
+// ── M-04: colon-in-id codec contract (builder + parser agree) ──
+
+test("M-04: encodeGateCallback round-trips through parseGateCallback for colon-free ids", () => {
+  const value = encodeGateCallback("g1", "yes");
+  assert.equal(value, "g1:yes");
+  assert.deepEqual(parseGateCallback(value), { gateId: "g1", choice: "yes" });
+});
+
+test("M-04: a colon in gate.id is rejected at build time (no silent default-deny)", () => {
+  const gate: GsdGate = {
+    id: "phase:2",
+    kind: "binary",
+    title: "Approve?",
+    choices: [{ id: "yes", label: "Yes" }],
+  };
+  // Pre-fix: builder emitted "phase:2:yes", parser split on the first colon →
+  // gateId "phase", choice "2:yes" → validateGateChoice default-denies a valid
+  // click and the gate stalls. Now the colon is rejected loudly at encode time.
+  assert.throws(() => buildButtonsGate(gate), GateCallbackParseError);
+  assert.throws(() => buildSelectGate(gate), GateCallbackParseError);
+  assert.throws(() => encodeGateCallback("phase:2", "yes"), GateCallbackParseError);
+});
+
+test("M-04: a colon in choice.id is rejected at build time", () => {
+  const gate: GsdGate = {
+    id: "g1",
+    kind: "select",
+    title: "Pick",
+    choices: [{ id: "a:b", label: "A" }],
+  };
+  assert.throws(() => buildSelectGate(gate), GateCallbackParseError);
+  assert.throws(() => encodeGateCallback("g1", "a:b"), GateCallbackParseError);
 });
 
 test("resume.ts NEVER imports setWaiting/managedFlows (Pitfall 2)", () => {
