@@ -106,9 +106,25 @@ function hasUnresolvedVerificationFail(planningDir: string, phases: RoadmapPhase
       } catch {
         continue;
       }
-      for (const line of content.split("\n")) {
-        if (line.trim().startsWith("#")) continue; // skip comment lines
-        if (/\bFAIL\b/.test(line) && !/override/i.test(line)) return true;
+      for (const raw of content.split("\n")) {
+        const line = raw.trim();
+        if (line.startsWith("#")) continue; // skip headings/comments
+        if (!/\bFAIL(ED)?\b/i.test(line)) continue;
+        // H-01: anchor to the verdict grammar, not bare prose. Ignore negations
+        // ("No FAIL conditions remain"), resolutions, and override-marked lines.
+        if (/\b(no|zero|0)\b[^.]*\bfail/i.test(line)) continue;
+        if (/\b(resolved|override|overridden|n\/a|not applicable|pass(ed)?)\b/i.test(line)) continue;
+        // A real unresolved FAIL is a delimited verdict value:
+        //  - status/result/verdict field:  "status: failed", "Result: FAIL"
+        //  - a table cell:                 "| FAIL |"
+        //  - an unchecked checklist item:  "- [ ] ... FAIL"
+        if (
+          /\b(status|result|verdict|outcome)\b\s*[:=]\s*"?\s*FAIL(ED)?\b/i.test(line) ||
+          /(^|\|)\s*FAIL(ED)?\s*(\||$)/i.test(line) ||
+          /^[-*]\s*\[\s*\]\s.*\bFAIL(ED)?\b/i.test(line)
+        ) {
+          return true;
+        }
       }
     }
   }
@@ -170,9 +186,18 @@ export function route(planningDir: string): RouteResult {
     const fp = findPhase(planningDir, ph.number);
 
     // Route 2: phase dir absent or has neither CONTEXT.md nor RESEARCH.md → discuss.
-    const hasContext = dir
-      ? fs.readdirSync(dir).some((f) => f.endsWith("CONTEXT.md") || f.endsWith("RESEARCH.md"))
-      : false;
+    // H-02: guard this fs read (the one previously-unguarded read) so route() honors its
+    // no-throw contract under ENOENT/EACCES/rename races (it runs inside the finalize hook).
+    let hasContext = false;
+    if (dir) {
+      try {
+        hasContext = fs
+          .readdirSync(dir)
+          .some((f) => f.endsWith("CONTEXT.md") || f.endsWith("RESEARCH.md"));
+      } catch {
+        hasContext = false;
+      }
+    }
     if (!dir || !hasContext) {
       if (fp.plans.length === 0) {
         return { route: 2, action: "discuss-phase", phase: ph.number, reason: "no-context" };
