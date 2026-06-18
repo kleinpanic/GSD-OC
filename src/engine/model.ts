@@ -48,10 +48,19 @@ export type ModelConfig = {
  * else profile "inherit" → "inherit"; else the agent's tier model for the profile
  * (adaptive uses routingTier → ADAPTIVE_TIER_MAP). Unknown profile falls back to
  * "balanced" (model-catalog.cjs:109). Unknown agent (no override) → null.
+ *
+ * M-03: an override is honored only when it is a non-empty, KNOWN tier. An empty
+ * string ("") — plausible from a misconfigured overrides map — is treated as ABSENT
+ * and falls through to profile resolution (instead of silently returning ""). An
+ * unrecognized override tier likewise falls through rather than returning garbage.
  */
+const VALID_OVERRIDE_TIERS = new Set<string>(["opus", "sonnet", "haiku", "inherit"]);
+
 export function resolveModel(agentId: string, config: ModelConfig = {}): string | null {
   const override = config.model_profile_overrides?.[agentId];
-  if (override) return override;
+  if (typeof override === "string" && VALID_OVERRIDE_TIERS.has(override)) {
+    return override;
+  }
 
   const requested = config.model_profile;
   const profile: Profile = (VALID_PROFILES as readonly string[]).includes(requested ?? "")
