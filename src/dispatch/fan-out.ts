@@ -50,11 +50,14 @@ async function runLane(
     const { runId } = await api.runtime.subagent.run(runParams);
     const wait = await api.runtime.subagent.waitForRun({ runId, timeoutMs });
     let text = "";
+    let parsed: boolean | undefined;
     if (wait.status === "ok") {
       const { messages } = await api.runtime.subagent.getSessionMessages({ sessionKey, limit: 20 });
-      text = extractAssistantText(messages);
+      const extracted = extractAssistantText(messages);
+      text = extracted.text;
+      parsed = extracted.parsed; // L-03: parser-drift vs empty-reply signal
     }
-    result = { status: wait.status, text, error: wait.error, sessionKey };
+    result = { status: wait.status, text, error: wait.error, sessionKey, parsed };
   } catch (err) {
     // A lane dispatch error must not sink the whole fan-out (no throw, OR-Q5a).
     result = { status: "error", text: "", error: String(err), sessionKey };

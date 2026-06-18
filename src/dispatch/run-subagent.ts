@@ -45,32 +45,56 @@ export type RunSubagentResult = {
   text: string;
   error?: string;
   sessionKey: string;
+  /**
+   * L-03: distinguishes "no assistant text could be parsed from the transcript"
+   * (parsed:false — the loop should treat this as parser drift / unrecognized SDK
+   * shape, NOT a genuine empty reply) from "assistant replied but said nothing"
+   * (parsed:true, text:""). Only set when status === "ok".
+   */
+  parsed?: boolean;
+};
+
+export type ExtractedAssistantText = {
+  /** Concatenated assistant text (may be "" when the agent genuinely said nothing). */
+  text: string;
+  /**
+   * True when a recognizable assistant message WAS found and its content shape
+   * was understood (string, or an array of {text}). False when no assistant
+   * message matched a known shape — the caller cannot trust `text` as a real reply.
+   */
+  parsed: boolean;
 };
 
 /**
  * Defensively extract the last assistant text from `getSessionMessages().messages`
  * (typed `unknown[]`, OR-3). We do NOT hand-roll a session format — we inspect common
- * message shapes ({ role, content }) and fall back to "".
+ * message shapes ({ role, content }) and fall back to {text:"", parsed:false}.
+ *
+ * L-03: returns a parsed flag so callers can tell "no text extracted" (parser drift
+ * against the real SDK shape — e.g. a tool-result-only final message, or a
+ * {type:"text", value:...} shape) from "agent said nothing" (a real empty reply).
  */
-export function extractAssistantText(messages: unknown[]): string {
+export function extractAssistantText(messages: unknown[]): ExtractedAssistantText {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     if (m && typeof m === "object" && (m as { role?: unknown }).role === "assistant") {
       const content = (m as { content?: unknown }).content;
-      if (typeof content === "string") return content;
+      if (typeof content === "string") return { text: content, parsed: true };
       if (Array.isArray(content)) {
-        const parts = content
-          .map((c) =>
-            c && typeof c === "object" && typeof (c as { text?: unknown }).text === "string"
-              ? (c as { text: string }).text
-              : "",
-          )
-          .filter(Boolean);
-        if (parts.length) return parts.join("\n");
+        const textParts = content.filter(
+          (c) => c && typeof c === "object" && typeof (c as { text?: unknown }).text === "string",
+        );
+        // A recognized array-of-parts assistant message: parsed even when every
+        // part is empty (a genuine empty reply), so the caller does not mistake it
+        // for parser drift.
+        const joined = textParts.map((c) => (c as { text: string }).text).filter(Boolean).join("\n");
+        return { text: joined, parsed: true };
       }
+      // An assistant message whose content is neither string nor a parts array:
+      // unrecognized shape → keep scanning earlier messages, may stay parsed:false.
     }
   }
-  return "";
+  return { text: "", parsed: false };
 }
 
 /**
@@ -113,9 +137,13 @@ export async function runSubagent(
   });
 
   let text = "";
+  let parsed: boolean | undefined;
   if (wait.status === "ok") {
     const { messages } = await api.runtime.subagent.getSessionMessages({ sessionKey, limit: 20 });
-    text = extractAssistantText(messages);
+    const extracted = extractAssistantText(messages);
+    text = extracted.text;
+    // L-03: only meaningful on a successful run — surface parser drift vs empty reply.
+    parsed = extracted.parsed;
   }
 
   if (opts.cleanup !== false) {
@@ -126,5 +154,5 @@ export async function runSubagent(
     }
   }
 
-  return { status: wait.status, text, error: wait.error, sessionKey };
+  return { status: wait.status, text, error: wait.error, sessionKey, parsed };
 }
