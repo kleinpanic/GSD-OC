@@ -1,0 +1,10 @@
+.planning/
+research/
+REPOSITORY-STRUCTURE.md
+test/
+dist-test/
+src/
+*.test.ts
+tsconfig*.json
+.remember/
+.gitignore
