@@ -7,6 +7,8 @@ import { runSubagent, type RunSubagentApi } from "./dispatch/run-subagent.js";
 import { readState } from "./state/read-state.js";
 import { routerMetadataTools } from "./routers/routers.js";
 import { buildWiredRouterTools } from "./routers/route-wire.js";
+import { registerInternalHook, isAgentBootstrapEvent } from "openclaw/plugin-sdk/hook-runtime";
+import { gsdBootstrapHandler, type AgentBootstrapEvent } from "./engage/bootstrap-inject.js";
 
 const PLUGIN_ID = "gsd-oc";
 const PLUGIN_NAME = "GSD-OC";
@@ -93,6 +95,16 @@ const entry = definePluginEntry({
     api.registerHook("before_agent_finalize", autoAdvanceHandler as never, {
       name: "gsd-oc:auto-advance",
     } as never);
+
+    // R0.5 auto-engage (ROBUST, canonical): the `agent:bootstrap` internal hook fires on the
+    // embedded/gateway agent path and is backed by the SAME runner the agent consults — unlike
+    // before_prompt_build, it is NOT wiped by the per-load hook-runner re-init. It owns the
+    // order-10 AGENTS content with the imperative GSD policy, gated to ~/codeWS + opt-out. This
+    // delivers auto-engage WITHOUT requiring a per-project on-disk AGENTS.md write.
+    registerInternalHook("agent:bootstrap", (event) => {
+      if (!isAgentBootstrapEvent(event)) return;
+      gsdBootstrapHandler(event as unknown as AgentBootstrapEvent);
+    });
 
     // Orchestrator tool: code-driven dispatch entry point (ORCH-01 / AGT-02).
     api.registerTool({
