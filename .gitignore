@@ -6,3 +6,4 @@ dist/
 
 # reference substrate (kept on disk, not tracked)
 .planning/research/gsd-source/
+dist-test/

@@ -1,0 +1,19 @@
+{
+  "id": "gsd-oc",
+  "name": "GSD-OC",
+  "description": "GSD lifecycle orchestration for OpenClaw — native, no Claude Code.",
+  "version": "0.0.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "gsd_orchestrate"
+    ]
+  }
+}
