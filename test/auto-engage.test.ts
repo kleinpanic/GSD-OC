@@ -2,12 +2,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { autoEngageHandler, isCodingWorkspace, GSD_META_PROMPT } from "../src/hooks/auto-engage.js";
+import { classifyIntent } from "../src/engage/classify.js";
 
 const evt = { prompt: "do work", messages: [] };
+const codeWS = join(homedir(), "codeWS", "SomeProject");
 
 test("auto-engage fires inside ~/codeWS (ENG-02)", () => {
-  const ctx = { workspaceDir: join(homedir(), "codeWS", "SomeProject") };
+  const ctx = { workspaceDir: codeWS };
   const r = autoEngageHandler(evt, ctx);
   assert.ok(r, "expected an injection result");
   assert.equal(r!.prependSystemContext, GSD_META_PROMPT);
@@ -16,6 +19,49 @@ test("auto-engage fires inside ~/codeWS (ENG-02)", () => {
 test("auto-engage does NOT fire outside coding workspaces (ENG-04 negative)", () => {
   assert.equal(autoEngageHandler(evt, { workspaceDir: "/tmp/random" }), undefined);
   assert.equal(autoEngageHandler(evt, {}), undefined);
+});
+
+test("Phase-1 backward-compat: 'do work' still classifies as engage (D-06)", () => {
+  assert.equal(classifyIntent("do work").engage, true);
+});
+
+test("ENG-04 negative inside codeWS: chat prompt -> no injection (D-05)", () => {
+  const r = autoEngageHandler({ prompt: "hi there", messages: [] }, { workspaceDir: codeWS });
+  assert.equal(r, undefined);
+});
+
+test("opt-out: .gsd-off marker suppresses a coding prompt in codeWS (ENG-03/D-02)", () => {
+  // isCodingWorkspace is rooted at ~/codeWS, so use a real temp project under it would be
+  // unsafe; instead drive the marker check via a cwd that IS a coding workspace by stubbing
+  // workspaceDir to a temp dir under ~/codeWS and placing the marker there.
+  const dir = mkdtempSync(join(homedir(), "codeWS", "gsd-ae-"));
+  try {
+    // coding prompt, no marker -> fires
+    assert.ok(autoEngageHandler(evt, { workspaceDir: dir }));
+    // marker present -> suppressed
+    writeFileSync(join(dir, ".gsd-off"), "");
+    assert.equal(autoEngageHandler(evt, { workspaceDir: dir }), undefined);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("opt-out: pluginConfig flag suppresses injection (ENG-03/D-04)", () => {
+  assert.equal(
+    autoEngageHandler(evt, { workspaceDir: codeWS }, { pluginConfig: { disabled: true } }),
+    undefined,
+  );
+  assert.equal(
+    autoEngageHandler(evt, { workspaceDir: codeWS }, { pluginConfig: { autoEngage: false } }),
+    undefined,
+  );
+});
+
+test("opt-out: sessionDisabled flag suppresses injection (ENG-03/D-03)", () => {
+  assert.equal(
+    autoEngageHandler(evt, { workspaceDir: codeWS }, { sessionDisabled: true }),
+    undefined,
+  );
 });
 
 test("isCodingWorkspace path containment", () => {
