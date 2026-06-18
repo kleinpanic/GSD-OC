@@ -48,9 +48,13 @@ const ACQUIRE_LOCK_RETRY_ERRNOS = new Set([
   "EINTR",
   "EINVAL",
   "EIO",
-  "ENOENT",
   "ESTALE",
 ]);
+
+// M-02: ENOENT from an O_CREAT|O_EXCL open is NOT transient — it means the
+// PARENT directory of the lock path does not exist (a genuine config error).
+// Treating it as retryable spins the full MAX_WAIT_MS budget then throws a
+// misleading "held by live process" error. Fail fast with a clear diagnostic.
 
 /**
  * Acquire `${statePath}.lock` via O_CREAT|O_EXCL|O_WRONLY, writing the pid.
@@ -73,6 +77,14 @@ export function acquireStateLock(statePath: string, clock: Clock = realClock): s
       return lockPath;
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
+      // M-02: ENOENT on the O_EXCL create = missing parent directory (non-transient).
+      // Fail fast rather than spin-waiting the full budget on a misclassified error.
+      if (code === "ENOENT") {
+        throw new Error(
+          `acquireStateLock: parent directory of ${lockPath} does not exist ` +
+            `(state directory missing) — original errno ENOENT`,
+        );
+      }
       // Transient filesystem errors are recoverable — retry the loop.
       if (code && ACQUIRE_LOCK_RETRY_ERRNOS.has(code)) continue;
       // Anything that is not EEXIST is fatal — propagate (silent bypass = lost updates).
@@ -84,10 +96,43 @@ export function acquireStateLock(statePath: string, clock: Clock = realClock): s
       try {
         const stat = fs.statSync(lockPath);
         if (clock.now() - stat.mtimeMs > STALE_THRESHOLD_MS) {
+          // M-01: rename-based steal (TOCTOU-safe). A blind unlink races a live
+          // writer who re-creates the lock between our stat and unlink — we would
+          // then delete the live lock and let two writers in. Instead, atomically
+          // rename the stale lock to a unique sidecar; only the process whose
+          // rename succeeds owns the reclaim. A concurrent fresh O_EXCL lock keeps
+          // its own (different) inode and is never clobbered.
+          const stolen = `${lockPath}.stale.${process.pid}.${Date.now()}`;
           try {
-            fs.unlinkSync(lockPath);
+            fs.renameSync(lockPath, stolen);
           } catch {
-            /* already gone */
+            // Lost the race (another reclaimer renamed it, or the holder released
+            // and a fresh lock now sits here) — fall through and retry O_EXCL.
+            continue;
+          }
+          // Re-confirm the renamed lock is the SAME stale lock we stat'd (mtime
+          // unchanged), then drop it. If a live writer had somehow advanced it,
+          // skip the unlink and let the loop re-contend cleanly.
+          try {
+            const after = fs.statSync(stolen);
+            if (after.mtimeMs === stat.mtimeMs) {
+              fs.unlinkSync(stolen);
+            } else {
+              // Different lock than the one we deemed stale — restore best-effort
+              // so we don't strand a still-relevant lock body.
+              try {
+                fs.renameSync(stolen, lockPath);
+              } catch {
+                /* a fresh O_EXCL lock already occupies lockPath — drop the sidecar */
+                try {
+                  fs.unlinkSync(stolen);
+                } catch {
+                  /* already gone */
+                }
+              }
+            }
+          } catch {
+            /* sidecar already gone */
           }
           continue;
         }

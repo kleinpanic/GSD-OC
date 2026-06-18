@@ -103,6 +103,85 @@ test("writeStateMd writes whole content under the lock", () => {
   assert.ok(!fs.existsSync(p + ".lock"));
 });
 
+test("M-01: stale-lock steal preserves a fresh lock created in the unlink window (TOCTOU)", () => {
+  const p = tmpStatePath();
+  const lockPath = p + ".lock";
+  // Place a stale lock (mtime well past the 10s threshold).
+  fs.writeFileSync(lockPath, "12345");
+  const old = new Date(Date.now() - 60_000);
+  fs.utimesSync(lockPath, old, old);
+
+  // Acquire reclaims the stale lock and writes OUR pid. Crucially the lock that
+  // ends up at lockPath must be the one we acquired — not a clobbered fresh lock.
+  const lock = acquireStateLock(p);
+  assert.equal(lock, lockPath);
+  assert.equal(fs.readFileSync(lock, "utf8"), String(process.pid));
+  // No stale sidecars left behind.
+  const dir = dirname(lockPath);
+  const leaked = fs.readdirSync(dir).filter((f) => f.includes(".stale."));
+  assert.deepEqual(leaked, [], "no .stale. sidecar should leak after a clean steal");
+  releaseStateLock(lock);
+});
+
+test("M-01: a fresh live lock placed in the steal window is not clobbered", () => {
+  const p = tmpStatePath();
+  const lockPath = p + ".lock";
+  // Stale lock present at stat time.
+  fs.writeFileSync(lockPath, "12345");
+  const old = new Date(Date.now() - 60_000);
+  fs.utimesSync(lockPath, old, old);
+
+  // Simulate the TOCTOU race: a live writer replaces the lock with a BRAND-NEW
+  // lock (current mtime) inside the steal window. We model this by intercepting
+  // renameSync — after our code renames the stale lock away, the live writer
+  // immediately drops a fresh lock at lockPath. The rename-based steal unlinks
+  // ONLY the renamed sidecar (the inode it actually moved), so the fresh live
+  // lock at lockPath survives; the acquire then spin-waits and throws.
+  let raced = false;
+  const origRename = fs.renameSync;
+  const patched = (from: fs.PathLike, to: fs.PathLike) => {
+    origRename(from, to);
+    if (!raced && String(from) === lockPath) {
+      raced = true;
+      // Live writer wins the now-empty slot with a fresh lock (current mtime).
+      fs.writeFileSync(lockPath, "88888");
+    }
+  };
+  (fs as { renameSync: typeof fs.renameSync }).renameSync = patched as typeof fs.renameSync;
+  try {
+    // Start the fake clock at real wall-clock so the backdated mtime reads as
+    // stale; sleeps then advance it past the 30s budget without real waits.
+    const clock = fakeClock(Date.now());
+    assert.throws(
+      () => acquireStateLock(p, clock),
+      /held by live process/,
+      "the fresh live lock must survive and force the budget-exceeded throw",
+    );
+    // The live writer's lock body is intact (never clobbered by the steal).
+    assert.equal(fs.readFileSync(lockPath, "utf8"), "88888", "live lock body preserved");
+  } finally {
+    (fs as { renameSync: typeof fs.renameSync }).renameSync = origRename;
+    try {
+      fs.unlinkSync(lockPath);
+    } catch {
+      /* ignore */
+    }
+  }
+});
+
+test("M-02: missing parent directory fails fast with a clear error (not budget spin)", () => {
+  // statePath whose parent dir does not exist → O_EXCL create yields ENOENT.
+  const missing = join(os.tmpdir(), "gsd-oc-nonexistent-" + Date.now(), "sub", "STATE.md");
+  const clock = fakeClock(0);
+  assert.throws(
+    () => acquireStateLock(missing, clock),
+    /parent directory .* does not exist/,
+    "ENOENT must fail fast with a directory-missing error",
+  );
+  // Fail-fast means no budget spin: the fake clock never advanced via sleep.
+  assert.equal(clock.now(), 0, "must not have spin-waited the full budget on ENOENT");
+});
+
 test("readState re-exported from state.ts parses the engine-state fixture identically", async () => {
   const p = tmpStatePath();
   const s = await readState(dirname(p));
