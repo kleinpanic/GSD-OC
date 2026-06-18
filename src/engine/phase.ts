@@ -178,6 +178,16 @@ export function findPhase(planningDir: string, phase: string | number): FindPhas
  */
 export function nextDecimalPhase(planningDir: string, basePhase: string | number): string {
   const normalized = normalizePhaseName(basePhase);
+  // L-02: a decimal basePhase (e.g. "2.3") previously had its decimal silently
+  // discarded by parseInt — nextDecimalPhase("2.3") would compute children of
+  // phase 2, not of 2.3. The flat phases/ layout only supports decimal children
+  // of an INTEGER base; fail loud rather than return a surprising result.
+  if (/\.\d/.test(normalized)) {
+    throw new Error(
+      `nextDecimalPhase: basePhase must be an integer phase (got ${JSON.stringify(String(basePhase))}); ` +
+        `decimal sub-phases cannot themselves have decimal children in the flat phases/ layout`,
+    );
+  }
   // Return value uses the bare integer form (e.g. "2.3"), matching the plan's behavior spec.
   const baseInt = String(parseInt(normalized, 10));
   const decimalSet = new Set<number>();
