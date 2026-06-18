@@ -24,11 +24,25 @@ test("mergeGsdSection creates AGENTS.md when none exists", () => {
   assert.ok(out.includes(GSD_BEGIN) && out.includes(GSD_END));
 });
 
-test("mergeGsdSection appends to existing content without clobbering it", () => {
+test("mergeGsdSection prepends the block (leads competing persona) without clobbering content", () => {
   const existing = "# AGENTS.md\n\n## House rules\n- be terse\n";
   const out = mergeGsdSection(existing);
   assert.ok(out.includes("## House rules"), "existing content preserved");
   assert.ok(out.includes(GSD_BEGIN));
+  // Salience: the GSD block must lead the competing persona (appear BEFORE "## House rules").
+  assert.ok(
+    out.indexOf(GSD_BEGIN) < out.indexOf("## House rules"),
+    "GSD block leads the existing persona",
+  );
+  // The leading `# AGENTS.md` title stays at the very top.
+  assert.ok(out.startsWith("# AGENTS.md"), "title preserved at top");
+});
+
+test("mergeGsdSection prepends the block at the very top when there is no title line", () => {
+  const existing = "## House rules\n- be terse\n";
+  const out = mergeGsdSection(existing);
+  assert.ok(out.startsWith(GSD_BEGIN), "block leads the file when no title");
+  assert.ok(out.indexOf(GSD_BEGIN) < out.indexOf("## House rules"));
 });
 
 test("mergeGsdSection is idempotent — re-merge refreshes the block in place, no duplication", () => {
