@@ -1,5 +1,6 @@
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { resolve, sep } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { classifyIntent } from "../engage/classify.js";
 import { optedOut } from "../engage/opt-out.js";
 
@@ -18,22 +19,40 @@ export type BeforePromptBuildResult = {
   appendSystemContext?: string;
 };
 
-/** Default coding-workspace roots that trigger auto-engage (ENG-02). */
-function codingWorkspaceRoots(): string[] {
-  return [resolve(homedir(), "codeWS")];
+/** Default coding-workspace roots that trigger auto-engage (ENG-02). Operators can extend via pluginConfig. */
+function codingWorkspaceRoots(extra: string[] = []): string[] {
+  return [resolve(homedir(), "codeWS"), ...extra.map((r) => resolve(r))];
 }
 
-/** True if `dir` is inside one of the coding-workspace roots. */
+/** Filesystem markers that identify any directory as a real coding project (root-agnostic). */
+const CODING_MARKERS = [".git", "package.json", ".planning", "pyproject.toml", "Cargo.toml", "go.mod", "tsconfig.json"];
+
+/** True if `dir` itself looks like a coding project (has a marker). Path-independent — this is what makes
+ *  auto-engage fire in agent workspaces (~/.openclaw/workspace-*) that are not under ~/codeWS. */
+function hasCodingMarker(dir: string): boolean {
+  try {
+    return CODING_MARKERS.some((m) => existsSync(join(dir, m)));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True if `dir` is a coding workspace: either inside a configured root (default ~/codeWS + pluginConfig
+ * `codingRoots`), OR it carries a coding-project marker (.git/package.json/.planning/…). The marker path
+ * is root-agnostic so GSD auto-engages for real projects regardless of where the agent's workspace lives.
+ */
 export function isCodingWorkspace(
   dir: string | undefined,
   roots: string[] = codingWorkspaceRoots(),
 ): boolean {
   if (!dir) return false;
   const target = resolve(dir);
-  return roots.some((root) => {
+  const underRoot = roots.some((root) => {
     const r = resolve(root);
     return target === r || target.startsWith(r + sep);
   });
+  return underRoot || hasCodingMarker(target);
 }
 
 /** The GSD meta-prompt injected when auto-engage fires. Static guidance (cacheable). */
@@ -80,8 +99,12 @@ export function autoEngageHandler(
   // Fall back to process.cwd() for the codeWS gate too (not just the opt-out check): a missing
   // ctx.workspaceDir must not block activation when the real cwd is inside a coding workspace (cross-AI F5).
   const cwd = ctx?.workspaceDir ?? process.cwd();
+  // Operators can add coding roots via pluginConfig.codingRoots (string[]); markers cover the rest.
+  const extraRoots = Array.isArray((deps.pluginConfig as { codingRoots?: unknown })?.codingRoots)
+    ? ((deps.pluginConfig as { codingRoots: string[] }).codingRoots)
+    : [];
   const engage =
-    isCodingWorkspace(cwd) &&
+    isCodingWorkspace(cwd, codingWorkspaceRoots(extraRoots)) &&
     classifyIntent(event.prompt).engage &&
     !optedOut({ cwd, pluginConfig: deps.pluginConfig, sessionDisabled: deps.sessionDisabled });
   if (!engage) return;
