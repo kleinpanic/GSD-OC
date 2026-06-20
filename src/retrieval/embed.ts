@@ -12,8 +12,8 @@ export interface SparkConfig {
 
 export type InputType = "query" | "passage";
 
-const MAX_BATCH = 64;
-const TIMEOUT_MS = 30000;
+const MAX_BATCH = 32; // smaller batches = lower per-request latency on a loaded NIM
+const TIMEOUT_MS = 120000; // spark NIM can be slow under load (28s+/batch); generous timeout
 
 // The corpus vectors were embedded with this model at 2048-dim — the query MUST use the same model,
 // so it is the default when SPARK_EMBEDDINGS_MODEL is unset. Default port mirrors the spark NIM.
