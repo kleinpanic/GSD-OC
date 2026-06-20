@@ -38,9 +38,18 @@ test("PATH-01: security intent → secure step inserted", () => {
   assert.ok(has(p, "secure"));
 });
 
-test("PATH-01: no long-tail retrieval → backbone only, no spurious long-tail steps", () => {
-  const p = selectPath({ intent: "add a config option", retrieved: [{ docId: "workflow:plan-phase" }, { docId: "agent:gsd-planner" }] });
+test("PATH-01: substantial work, no long-tail → full backbone only", () => {
+  const p = selectPath({ intent: "build a new feature", retrieved: [{ docId: "workflow:plan-phase" }, { docId: "agent:gsd-planner" }] });
   assert.ok(!has(p, "ui") && !has(p, "debug") && !has(p, "ai-integration") && !has(p, "secure"));
   assert.equal(p.length, 8); // backbone: discuss, map-codebase, research, plan, execute, code-review, verify, ship
   assert.ok(has(p, "research"), "research is core (research-first GSD, ENF-02)");
+});
+
+test("PATH-complexity: a QUICK intent gets the minimal path, not the full lifecycle (gsd-quick parity)", () => {
+  const p = selectPath({ intent: "rename a config key", retrieved: [] });
+  assert.deepEqual(p.map((s) => s.verb), ["execute", "verify"], "quick = execute + light verify only");
+  assert.ok(!has(p, "discuss") && !has(p, "plan") && !has(p, "map-codebase") && !has(p, "ship"));
+  // a quick BUGFIX still gets the debug conditional
+  const fix = selectPath({ intent: "fix the flaky test", retrieved: [] });
+  assert.ok(has(fix, "debug"), "quick bugfix still routes through debug");
 });

@@ -164,14 +164,26 @@ const entry = definePluginEntry({
           ...base,
           path: path.map((s) => ({ verb: s.verb, skill: s.skill, gate: s.gate, reason: s.reason })),
           relevant_skills: retrieved.slice(0, 8).map((r) => ({ id: r.docId, modality: r.modalities })),
+          // Agent-driven execution (the OpenClaw-native model — the plugin plans, the agent executes):
+          // dispatch each NON-gate step's `skill` as a subagent via your sessions_spawn tool, in order;
+          // PAUSE at each `gate:true` step for the required discussion/approval before continuing.
+          how_to_execute:
+            "Dispatch each non-gate path step's skill as a subagent (sessions_spawn) in order; pause at gate:true steps for approval. Persist artifacts under .planning/.",
         };
         // PATH-execution: actually DRIVE the path (dispatch subagents, halt at gates) when asked AND the
         // live subagent runtime is reachable. Prefer the closure api (reliable), fall back to the context
         // arg; otherwise return the plan (graceful — never crash).
         const ctxApi = (context?.api ?? null) as { runtime?: { subagent?: unknown } } | null;
         const runtimeApi = pluginApi?.runtime?.subagent ? pluginApi : ctxApi?.runtime?.subagent ? ctxApi : null;
+        // Diagnostic: report whether the in-plugin subagent runtime is reachable (drives are only possible when true).
+        if (args?.drive && !runtimeApi) {
+          return { ...planned, drive_available: false, note: "subagent runtime not reachable from the plugin in this host — the agent must dispatch each path step via its own sessions_spawn tool" };
+        }
         if (args?.drive && runtimeApi) {
-          const dispatch = makeSubagentDispatcher(runtimeApi as never, intent);
+          // GSD personas must run under a real allowlisted agent (subagents.allowAgents). Default "dev" —
+          // present in every primary agent's allowlist; operator-overridable via pluginConfig.workerAgent.
+          const baseAgent = (typeof pluginConfig?.workerAgent === "string" && pluginConfig.workerAgent) || "dev";
+          const dispatch = makeSubagentDispatcher(runtimeApi as never, intent, baseAgent);
           const run = await executePath(path, dispatch, { autoGates: args?.autoGates === true });
           return {
             ...planned,

@@ -4,7 +4,12 @@
  * (discuss→map→plan→execute→code-review→verify→ship) plus conditional long-tail stages (ui / ai-eval /
  * debug / secure / spike / graphify) activated by what retrieval found, NOT a static table. This is the
  * "what should happen" plan; the live position within it comes from route() over .planning/ state.
+ *
+ * Complexity-tiered (gsd-quick parity): a "quick" intent (add/rename/tweak/fix a small thing) gets a
+ * MINIMAL path — not the full lifecycle — so trivial work isn't over-orchestrated and a driven run
+ * completes fast. Substantial work (build/refactor/migrate/new-project) gets the full backbone.
  */
+import { classifyIntent } from "../engage/classify.js";
 
 export interface PathStep {
   verb: string;
@@ -23,7 +28,7 @@ interface Stage {
   reason?: string;
 }
 
-/** Core lifecycle backbone — always present, in canonical order. */
+/** Full lifecycle backbone for substantial work (build/refactor/migrate/new-project). */
 const BACKBONE: Stage[] = [
   { verb: "discuss", skill: "gsd-discuss-phase", pos: 10, gate: true, reason: "core: gather context + decisions (gate)" },
   { verb: "map-codebase", skill: "gsd-map-codebase", pos: 20, reason: "core: map existing code before planning" },
@@ -34,6 +39,19 @@ const BACKBONE: Stage[] = [
   { verb: "verify", skill: "gsd-verify-work", pos: 80, gate: true, reason: "core: goal-backward verification (gate)" },
   { verb: "ship", skill: "gsd-ship", pos: 90, reason: "core: PR + ship" },
 ];
+
+/**
+ * Minimal path for a "quick" intent (gsd-quick parity): a small, specific, actionable task — execute it
+ * with GSD guarantees (atomic commit, verify) but skip discuss/map/research/plan/ship. Conditional
+ * long-tail stages (debug/secure/ui…) still apply if the intent strongly signals them.
+ */
+const QUICK_BACKBONE: Stage[] = [
+  { verb: "execute", skill: "gsd-quick", pos: 60, reason: "quick: small actionable task — execute with GSD guarantees (atomic commit)" },
+  { verb: "verify", skill: "gsd-verify-work", pos: 80, reason: "quick: lightweight verification of the change" },
+];
+
+/** Intent categories (from classifyIntent) that take the minimal QUICK path instead of the full backbone. */
+const QUICK_CATEGORIES = new Set(["quick"]);
 
 /**
  * Conditional long-tail stages. Each activates on EITHER (a) the intent text matching the category's
@@ -76,7 +94,9 @@ export interface SelectPathInput {
 export function selectPath(input: SelectPathInput): PathStep[] {
   const intent = input.intent.toLowerCase();
   const topIds = input.retrieved.slice(0, CONSENSUS_TOP).map((r) => r.docId.toLowerCase());
-  const stages: Stage[] = [...BACKBONE];
+  // Complexity tier: a "quick" intent gets the minimal path; substantial work gets the full backbone.
+  const category = classifyIntent(input.intent).category;
+  const stages: Stage[] = [...(QUICK_CATEGORIES.has(category) ? QUICK_BACKBONE : BACKBONE)];
   for (const c of CONDITIONAL) {
     const consensus = topIds.filter((id) => c.doc.test(id)).length >= CONSENSUS_MIN;
     if (c.intent.test(intent) || consensus) stages.push(c.stage);

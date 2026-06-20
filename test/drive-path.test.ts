@@ -93,9 +93,29 @@ test("gsd_orchestrate drive:true reaches dispatch via the register(api) closure 
     session: { state: { registerSessionExtension() {} } },
   };
   entry.register(api as never);
-  // No ctx 5th-arg at all → drive must still work via the closure api.
-  const r = await tool!.execute("call", { intent: "rename a config key", drive: true, autoGates: true });
+  // Substantial intent → full backbone. No ctx 5th-arg → drive must still work via the closure api.
+  const r = await tool!.execute("call", { intent: "build a new authentication feature", drive: true, autoGates: true });
   assert.ok(Array.isArray(r.executed), "drive reached executePath (executed array present)");
   assert.equal(r.completed, true, "all backbone steps dispatched to completion");
   assert.ok(runs.length >= 5, `dispatched the mapped subagents (got ${runs.length})`);
+});
+
+test("drive: a QUICK intent dispatches FAR fewer subagents (fast — no over-orchestration)", async () => {
+  let tool: { execute: (...a: unknown[]) => Promise<{ completed?: boolean }> } | undefined;
+  const runs: string[] = [];
+  const api = {
+    runtime: { subagent: {
+      async run(p: { sessionKey: string }) { runs.push(p.sessionKey); return { runId: "r" }; },
+      async waitForRun() { return { status: "ok" }; },
+      async getSessionMessages() { return { messages: [{ role: "assistant", content: "ok" }] }; },
+      async deleteSession() {},
+    } },
+    registerService() {}, registerTool(t: { name: string }) { if (t.name === "gsd_orchestrate") tool = t as never; },
+    registerCommand() {}, registerHook() {}, registerInteractiveHandler() {},
+    session: { state: { registerSessionExtension() {} } },
+  };
+  entry.register(api as never);
+  const r = await tool!.execute("call", { intent: "rename a config key", drive: true, autoGates: true });
+  assert.equal(r.completed, true);
+  assert.ok(runs.length <= 2, `quick path dispatches <=2 subagents (got ${runs.length}) — completes fast`);
 });

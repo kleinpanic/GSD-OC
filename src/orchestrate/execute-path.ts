@@ -31,12 +31,13 @@ export const VERB_TO_SUBAGENT: Record<string, string> = {
  * subagent are dispatched (runSubagent); unmapped steps succeed as no-ops so the path advances. The
  * subagent's run status becomes the step outcome (ok/failure).
  */
-export function makeSubagentDispatcher(api: RunSubagentApi, intent: string): StepDispatcher {
+export function makeSubagentDispatcher(api: RunSubagentApi, intent: string, baseAgentId?: string): StepDispatcher {
   return async (step: PathStep): Promise<StepOutcome> => {
     const agentId = VERB_TO_SUBAGENT[step.verb];
     if (!agentId) return { ok: true, output: `${step.verb}: no subagent (skill/gate step)` };
     const msg = `GSD ${step.verb} step for intent: ${intent}. ${step.reason}`;
-    const res = await runSubagent(api, agentId, msg);
+    // baseAgentId hosts the GSD persona as a sub-lane (allowlist requirement — see runSubagent).
+    const res = await runSubagent(api, agentId, msg, baseAgentId ? { baseAgentId } : {});
     // Surface the run status (ok/error/timeout) so a mid-drive timeout is distinguishable from a failure.
     return { ok: res.status === "ok", output: res.text || `[${res.status}]` };
   };
