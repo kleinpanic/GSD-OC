@@ -87,7 +87,7 @@ function resolveDocRoots(root: string): DetectedInstall["docRoots"] {
   const agentsCore = join(core, "agents");
   const agents = isDir(agentsSibling) ? agentsSibling : agentsCore;
   return [
-    { kind: "workflow", root: join(core, "workflows"), recursive: false },
+    { kind: "workflow", root: join(core, "workflows"), recursive: true },
     { kind: "agent", root: agents, recursive: false },
     { kind: "reference", root: join(core, "references"), recursive: false },
     { kind: "template", root: join(core, "templates"), recursive: true },
