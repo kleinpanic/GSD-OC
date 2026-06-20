@@ -80,6 +80,7 @@ export async function defaultSemantic(opts: EmbedOptions = {}): Promise<Semantic
  * MRR, ×1 dropped flaky→debug out of topK entirely. See .planning/BENCHMARK.md.
  */
 const SEMANTIC_WEIGHT = 2;
+const RRF_K = 60;
 
 export interface RetrieveOptions {
   topK?: number;
@@ -88,6 +89,8 @@ export interface RetrieveOptions {
   semantic?: SemanticSearcher | null;
   /** override fusion weights [bm25, trigram, semantic?]; defaults to [1,1,SEMANTIC_WEIGHT]. */
   weights?: number[];
+  /** RRF rank constant; smaller = sharper top-rank emphasis. Default RRF_K. */
+  k?: number;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -116,6 +119,6 @@ export async function retrieve(query: string, opts: RetrieveOptions = {}): Promi
       s.add(mod);
     }
   });
-  const docs = rollup(rrf(lists, 60, weights), corpus).slice(0, topK);
+  const docs = rollup(rrf(lists, opts.k ?? RRF_K, weights), corpus).slice(0, topK);
   return docs.map((d) => ({ ...d, modalities: [...(modByChunk.get(d.topChunkId) ?? [])] }));
 }
