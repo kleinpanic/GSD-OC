@@ -12,6 +12,7 @@ import { gsdBootstrapHandler, type AgentBootstrapEvent } from "./engage/bootstra
 import { retrieve } from "./retrieval/retrieve.js";
 import { embedAvailable } from "./retrieval/embed.js";
 import { selectPath } from "./orchestrate/select-path.js";
+import { readGsdConfig, bootstrapGsdConfig } from "./engine/config.js";
 import { executePath, makeSubagentDispatcher } from "./orchestrate/execute-path.js";
 
 const PLUGIN_ID = "gsd-oc";
@@ -20,6 +21,7 @@ const PLUGIN_DESCRIPTION = "GSD lifecycle orchestration for OpenClaw — native,
 
 const ORCHESTRATE_TOOL = "gsd_orchestrate";
 const RETRIEVE_TOOL = "gsd_retrieve";
+const SETTINGS_TOOL = "gsd_settings";
 
 /** TypeBox schema for the orchestrator tool's parameters. */
 const orchestrateParams = Type.Object(
@@ -44,6 +46,16 @@ const retrieveParams = Type.Object(
       description: "Free-text coding/big-work intent; returns the most relevant GSD skills + subagents (long-tail included).",
     }),
     topK: Type.Optional(Type.Number({ description: "Max results to return (default 8)." })),
+  },
+  { additionalProperties: false },
+);
+
+/** TypeBox schema for the gsd_settings tool. */
+const settingsParams = Type.Object(
+  {
+    bootstrap: Type.Optional(
+      Type.Boolean({ description: "Write a default GSD config if none exists (never overwrites)." }),
+    ),
   },
   { additionalProperties: false },
 );
@@ -221,6 +233,23 @@ const entry = definePluginEntry({
       },
     } as never);
 
+    // CFG-01: gsd_settings — read/inspect the project's GSD config (workflow toggles + model profile),
+    // parity with /gsd-settings + /gsd-config, reimplemented natively (0 Discord slots). When the project
+    // has no config yet, `bootstrap:true` writes the canonical GSD defaults (CFG-02; never overwrites).
+    api.registerTool({
+      name: SETTINGS_TOOL,
+      label: "GSD Settings",
+      description:
+        "Inspect the project's GSD configuration (workflow toggles, model profile, security/review gates) from .planning/config.json, with GSD defaults applied. Pass {bootstrap:true} to write a default config if none exists.",
+      parameters: settingsParams,
+      async execute(_toolCallId: string, args: { bootstrap?: boolean }, _signal?: unknown) {
+        let created = false;
+        if (args?.bootstrap) created = bootstrapGsdConfig(".planning");
+        const { config, source } = readGsdConfig(".planning");
+        return { source, created, model_profile: config.model_profile, workflow: config.workflow, git: config.git };
+      },
+    } as never);
+
     // R0.4 Tier-1: register the 6 namespace router tools (zero Discord slash slots).
     // RTE-01: register the WIRED builder so each router returns the state-aware authoritative
     // next verb (native route('.planning')), not the static substring table (verifier finding).
@@ -273,6 +302,12 @@ Object.defineProperty(entry, toolPluginMetadataSymbol, {
         label: "GSD Retrieve",
         description:
           "Retrieve relevant GSD skills/subagents for a free-text intent via hybrid retrieval (long-tail aware, 0 slots).",
+        parameters: { type: "object", additionalProperties: false, properties: {} },
+      },
+      {
+        name: SETTINGS_TOOL,
+        label: "GSD Settings",
+        description: "Inspect/bootstrap the project's GSD configuration (workflow toggles, model profile) — 0 slots.",
         parameters: { type: "object", additionalProperties: false, properties: {} },
       },
       ...routerMetadataTools(),
