@@ -15,10 +15,11 @@ import { route } from "../engine/route.js";
 import { isCodingWorkspace } from "./auto-engage.js";
 import { optedOut } from "../engage/opt-out.js";
 import { readGsdConfig } from "../engine/config.js";
+import { resolveAgentOptional } from "../agents/index.js";
 
 export type BeforeToolCallEvent = { toolName: string; params?: Record<string, unknown> };
 export type BeforeToolCallContext = { agentId?: string; sessionKey?: string };
-export type BeforeToolCallResult = { block?: boolean; blockReason?: string };
+export type BeforeToolCallResult = { block?: boolean; blockReason?: string; params?: Record<string, unknown> };
 export type EnforceGateDeps = { pluginConfig?: Record<string, unknown>; cwd?: string };
 
 /** Tools that mutate source files — the only candidates for the planning gate. */
@@ -68,4 +69,57 @@ export function enforceToolGate(
     };
   }
   return; // route says execute/verify/ship/etc. → planning done → allow the edit
+}
+
+/** Spawn tools the agent uses to create subagents. */
+const SPAWN_TOOLS = new Set(["sessions_spawn", "subagents", "task", "spawn_agent"]);
+
+/** Infer the GSD persona (gsd-*) for a spawn task from its text. Ordered: first match wins. */
+const ROLE_RULES: { re: RegExp; agent: string }[] = [
+  { re: /\b(research|investigat|domain|framework|api docs)\b/i, agent: "gsd-phase-researcher" },
+  { re: /\b(map|codebase|architecture|explore the code)\b/i, agent: "gsd-codebase-mapper" },
+  { re: /\b(plan|plan-?check|breakdown)\b/i, agent: "gsd-planner" },
+  { re: /\b(debug|flaky|fail|broken|crash|reproduce|bug)\b/i, agent: "gsd-debugger" },
+  { re: /\b(secur|vulnerab|threat|audit|harden)\b/i, agent: "gsd-security-auditor" },
+  { re: /\b(ui|frontend|component|design contract|sketch)\b/i, agent: "gsd-ui-researcher" },
+  { re: /\b(eval|ai-?integration|llm|agent quality)\b/i, agent: "gsd-eval-planner" },
+  { re: /\b(review|code review|code-review)\b/i, agent: "gsd-code-reviewer" },
+  { re: /\b(verif|validate|goal-backward)\b/i, agent: "gsd-verifier" },
+  { re: /\b(document|docs|readme)\b/i, agent: "gsd-doc-writer" },
+  { re: /\b(execut|implement|build|write the code|scaffold)\b/i, agent: "gsd-executor" },
+];
+
+function gsdRoleFor(text: string): string {
+  for (const r of ROLE_RULES) if (r.re.test(text)) return r.agent;
+  return "gsd-executor"; // default — still a GSD persona, never a bare instruction-less subagent
+}
+
+/**
+ * ENF-SPAWN: enforce that subagents spawned inside a GSD context carry a GSD PERSONA + instructions —
+ * never a bare instruction-less subagent. Intercepts the spawn tool and REWRITES its message param to
+ * prepend the matching gsd-* persona prompt. Returns the rewritten params (the host applies them), or void.
+ */
+export function enforceSpawnPersona(
+  event: BeforeToolCallEvent,
+  _ctx: BeforeToolCallContext,
+  deps: EnforceGateDeps = {},
+): BeforeToolCallResult | void {
+  if (!SPAWN_TOOLS.has((event.toolName ?? "").toLowerCase())) return;
+  const cwd = deps.cwd ?? process.cwd();
+  if (!isCodingWorkspace(cwd)) return;
+  if (optedOut({ cwd, pluginConfig: deps.pluginConfig })) return;
+
+  const params = event.params ?? {};
+  const taskText = String(params.message ?? params.task ?? params.prompt ?? "");
+  // Already a GSD subagent (persona already injected)? leave it.
+  if (/\bGSD subagent\b|gsd-oc:persona/.test(taskText)) return;
+
+  const role = gsdRoleFor(taskText);
+  const def = resolveAgentOptional(role);
+  const persona = def?.prompt ?? "";
+  const preamble =
+    `<!-- gsd-oc:persona -->\nYou are the GSD **${role}** subagent operating under the GSD methodology — ` +
+    `follow this role's contract, not free-form work.\n\n${persona}\n\n--- Task ---\n`;
+  const key = params.message != null ? "message" : params.task != null ? "task" : "message";
+  return { params: { ...params, [key]: preamble + taskText } };
 }

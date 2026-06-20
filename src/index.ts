@@ -13,7 +13,7 @@ import { retrieve } from "./retrieval/retrieve.js";
 import { embedAvailable } from "./retrieval/embed.js";
 import { selectPath } from "./orchestrate/select-path.js";
 import { readGsdConfig, bootstrapGsdConfig } from "./engine/config.js";
-import { enforceToolGate } from "./hooks/enforce-gate.js";
+import { enforceToolGate, enforceSpawnPersona } from "./hooks/enforce-gate.js";
 import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
 import { executePath, makeSubagentDispatcher } from "./orchestrate/execute-path.js";
 
@@ -156,12 +156,21 @@ const entry = definePluginEntry({
     // Safe by construction: only file edits, only when route() says discuss/plan, opt-out via .gsd-off/config.
     api.registerHook(
       "before_tool_call",
-      ((event: unknown, ctx: unknown) =>
-        enforceToolGate(
+      ((event: unknown, ctx: unknown) => {
+        // ENF-SPAWN: subagents spawned in a GSD context must carry a GSD persona (inject it). Runs first —
+        // if it rewrites the spawn params, the edit-gate (which ignores spawn tools) returns void anyway.
+        const spawn = enforceSpawnPersona(
+          event as Parameters<typeof enforceSpawnPersona>[0],
+          ctx as Parameters<typeof enforceSpawnPersona>[1],
+          { pluginConfig },
+        );
+        if (spawn) return spawn;
+        return enforceToolGate(
           event as Parameters<typeof enforceToolGate>[0],
           ctx as Parameters<typeof enforceToolGate>[1],
           { pluginConfig },
-        )) as never,
+        );
+      }) as never,
       { name: "gsd-oc:enforce-gate" } as never,
     );
 
