@@ -37,7 +37,8 @@ export function makeSubagentDispatcher(api: RunSubagentApi, intent: string): Ste
     if (!agentId) return { ok: true, output: `${step.verb}: no subagent (skill/gate step)` };
     const msg = `GSD ${step.verb} step for intent: ${intent}. ${step.reason}`;
     const res = await runSubagent(api, agentId, msg);
-    return { ok: res.status === "ok", output: res.text || res.status };
+    // Surface the run status (ok/error/timeout) so a mid-drive timeout is distinguishable from a failure.
+    return { ok: res.status === "ok", output: res.text || `[${res.status}]` };
   };
 }
 
@@ -82,7 +83,14 @@ export async function executePath(
       steps.push({ step, status: "gated" });
       return { steps, completed: false, haltedAt: step.verb, reason: "gate" };
     }
-    const outcome = await dispatch(step);
+    // A dispatcher that THROWS (SDK/network/abort) becomes a failed step, not an escaped rejection (review LOW-1).
+    let outcome: StepOutcome;
+    try {
+      outcome = await dispatch(step);
+    } catch (e) {
+      steps.push({ step, status: "failed", output: e instanceof Error ? e.message : String(e) });
+      return { steps, completed: false, haltedAt: step.verb, reason: "failure" };
+    }
     if (outcome.gated) {
       steps.push({ step, status: "gated", output: outcome.output });
       return { steps, completed: false, haltedAt: step.verb, reason: "gate" };

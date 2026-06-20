@@ -76,3 +76,10 @@ test("sparkConfig adapts to the GATEWAY env contract (SPARK_HOST + SPARK_BEARER_
   // SPARK_API_KEY alone (no bearer) also works
   assert.equal(embedAvailable({ SPARK_HOST: "h", SPARK_API_KEY: "k" } as NodeJS.ProcessEnv), true);
 });
+
+test("sparkConfig: SPARK_HOST with a scheme gets a /v1 path (review HIGH-2)", () => {
+  const c1 = sparkConfig({ SPARK_HOST: "https://spark.internal", SPARK_API_KEY: "k" } as NodeJS.ProcessEnv);
+  assert.equal(c1.baseUrl, "https://spark.internal/v1", "scheme host without version → append /v1");
+  const c2 = sparkConfig({ SPARK_HOST: "https://spark.internal/v1/", SPARK_API_KEY: "k" } as NodeJS.ProcessEnv);
+  assert.equal(c2.baseUrl, "https://spark.internal/v1", "scheme host already versioned → unchanged (trailing slash trimmed)");
+});

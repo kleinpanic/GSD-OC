@@ -48,14 +48,18 @@ const BACKBONE: Stage[] = [
 // debug/ui doc in many tails, but rarely two of one category in the top-5 unless it's genuinely relevant.
 const CONSENSUS_TOP = 5;
 const CONSENSUS_MIN = 2;
+// `doc` matches ONLY `workflow:` docs for the category — never agent ids. Keying consensus on agent-name
+// substrings let generic agents (gsd-domain-researcher, gsd-eval-auditor) falsely vote for ai-integration
+// and insert its HALTING gate (review HIGH-1). Workflow-doc consensus is a rare, genuine signal; keywords
+// carry the precise activation.
 const CONDITIONAL: { intent: RegExp; doc: RegExp; stage: Stage }[] = [
-  { intent: /\b(spike|prototype|poc|proof of concept|experiment|risky|de-?risk|unknown approach|explore)\b/, doc: /spike/, stage: { verb: "spike", skill: "gsd-spike", pos: 25, reason: "risky/unknown approach — spike first" } },
-  { intent: /\b(ui|frontend|front-end|react|vue|svelte|component|css|layout|dashboard|screen|page|mockup|sketch|design|button|form|modal)\b/, doc: /(^|:)ui-|ui-phase|sketch|frontend/, stage: { verb: "ui", skill: "gsd-ui-phase", pos: 30, gate: true, reason: "frontend work — UI design contract" } },
-  { intent: /\b(ai|a\.i\.|llm|agent|embedding|eval\w*|model|gpt|chatbot|rag|prompt|inference|fine-?tune)\b/, doc: /eval|ai-integration|ai-spec|domain-research|framework-select/, stage: { verb: "ai-integration", skill: "gsd-ai-integration-phase", pos: 35, gate: true, reason: "AI system — spec + eval strategy" } },
-  { intent: /\b(bug|debug\w*|flaky|fail\w*|broken|crash\w*|error|reproduce|intermittent|stack ?trace|regression)\b/, doc: /debug|debugger/, stage: { verb: "debug", skill: "gsd-debug", pos: 55, reason: "bug/failure intent — systematic debug" } },
-  { intent: /\b(secur\w*|vulnerab\w*|threat\w*|exploit\w*|csrf|xss|inject\w*|mitigat\w*|pentest|owasp|cve|auth\w*)\b/, doc: /secure|security/, stage: { verb: "secure", skill: "gsd-secure-phase", pos: 65, reason: "security-sensitive — threat model" } },
-  { intent: /\b(graph\w*|knowledge graph)\b/, doc: /graphify|knowledge-graph/, stage: { verb: "graphify", skill: "gsd-graphify", pos: 85, reason: "knowledge-graph request" } },
-  { intent: /\b(document\w*|readme|changelog|api docs|docstring)\b/, doc: /doc-writer|docs-update|documentation/, stage: { verb: "docs", skill: "gsd-docs-update", pos: 88, reason: "documentation request — write/verify docs" } },
+  { intent: /\b(spike|prototype|poc|proof of concept|experiment|risky|de-?risk|unknown approach|explore)\b/, doc: /^workflow:spike/, stage: { verb: "spike", skill: "gsd-spike", pos: 25, reason: "risky/unknown approach — spike first" } },
+  { intent: /\b(ui|frontend|front-end|react|vue|svelte|component|css|layout|dashboard|screen|page|mockup|sketch|design|button|form|modal)\b/, doc: /^workflow:(ui-phase|ui-review|sketch)/, stage: { verb: "ui", skill: "gsd-ui-phase", pos: 30, gate: true, reason: "frontend work — UI design contract" } },
+  { intent: /\b(ai|a\.i\.|llm|agent|embedding|eval\w*|model|gpt|chatbot|rag|prompt|inference|fine-?tune)\b/, doc: /^workflow:(ai-integration|eval-review|select-framework)/, stage: { verb: "ai-integration", skill: "gsd-ai-integration-phase", pos: 35, gate: true, reason: "AI system — spec + eval strategy" } },
+  { intent: /\b(bug|debug\w*|flaky|fail\w*|broken|crash\w*|error|reproduce|intermittent|stack ?trace|regression)\b/, doc: /^workflow:debug/, stage: { verb: "debug", skill: "gsd-debug", pos: 55, reason: "bug/failure intent — systematic debug" } },
+  { intent: /\b(secur\w*|vulnerab\w*|threat\w*|exploit\w*|csrf|xss|inject\w*|mitigat\w*|pentest|owasp|cve|auth\w*)\b/, doc: /^workflow:secure/, stage: { verb: "secure", skill: "gsd-secure-phase", pos: 65, reason: "security-sensitive — threat model" } },
+  { intent: /\b(graph\w*|knowledge graph)\b/, doc: /^workflow:graphify/, stage: { verb: "graphify", skill: "gsd-graphify", pos: 85, reason: "knowledge-graph request" } },
+  { intent: /\b(document\w*|readme|changelog|api docs|docstring)\b/, doc: /^workflow:docs-update/, stage: { verb: "docs", skill: "gsd-docs-update", pos: 88, reason: "documentation request — write/verify docs" } },
 ];
 
 export interface SelectPathInput {
