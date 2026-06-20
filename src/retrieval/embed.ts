@@ -53,8 +53,9 @@ async function embedBatch(cfg: SparkConfig, texts: string[], inputType: InputTyp
         signal: ctrl.signal,
       });
       if (!res.ok) throw new Error(`spark embeddings HTTP ${res.status}`);
-      const json = (await res.json()) as { data: { embedding: number[] }[] };
-      return json.data.map((d) => d.embedding);
+      const json = (await res.json()) as { data: { index: number; embedding: number[] }[] };
+      if (json.data.length !== texts.length) throw new Error(`spark returned ${json.data.length} embeddings for ${texts.length} inputs`);
+      return json.data.slice().sort((a, b) => a.index - b.index).map((d) => d.embedding);
     } catch (err) {
       lastErr = err;
     } finally {

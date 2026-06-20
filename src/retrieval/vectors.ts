@@ -117,7 +117,9 @@ export function loadVectorCache(paths: { bin: string; index: string } = vectorAr
   const idx = JSON.parse(readFileSync(paths.index, "utf8")) as { dim: number; chunkIds: string[] };
   const buf = readFileSync(paths.bin);
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-  return { dim: idx.dim, chunkIds: idx.chunkIds, matrix: new Float32Array(ab) };
+  const matrix = new Float32Array(ab);
+  if (matrix.length !== idx.dim * idx.chunkIds.length) return null; // truncated/mismatched artifact (e.g. partial copy)
+  return { dim: idx.dim, chunkIds: idx.chunkIds, matrix };
 }
 
 /** Persist normalized vectors as a Float32 .bin + a chunkId index (build-time). */

@@ -29,11 +29,19 @@ function lexical() {
   return lexCache;
 }
 
-/** Default semantic searcher from the build artifact: LanceDB primary, brute-force cosine fallback. null if unavailable. */
-export async function defaultSemantic(opts: EmbedOptions = {}): Promise<SemanticSearcher | null> {
-  if (!embedAvailable(opts.env)) return null;
+/**
+ * The vector backend (loadVectorCache() + optional LanceBackend.open()) is expensive — it reads the
+ * 36MB .bin and opens LanceDB — so memoize it ONCE at module level. embedAvailable() is re-checked
+ * per call in defaultSemantic() (cheap) so mid-suite env changes still route to the lexical-only path.
+ */
+let backendCache: VectorBackend | null | undefined; // undefined = not yet attempted
+async function semanticBackend(): Promise<VectorBackend | null> {
+  if (backendCache !== undefined) return backendCache;
   const cache = loadVectorCache();
-  if (!cache) return null;
+  if (!cache) {
+    backendCache = null;
+    return null;
+  }
   let backend: VectorBackend | null = null;
   const { lance } = vectorArtifactPaths();
   if (existsSync(lance)) {
@@ -43,8 +51,16 @@ export async function defaultSemantic(opts: EmbedOptions = {}): Promise<Semantic
       backend = null;
     }
   }
-  if (!backend) backend = new CosineBackend(cache);
-  return (query, topK) => semanticSearch(query, backend!, topK, opts);
+  backendCache = backend ?? new CosineBackend(cache);
+  return backendCache;
+}
+
+/** Default semantic searcher from the build artifact: LanceDB primary, brute-force cosine fallback. null if unavailable. */
+export async function defaultSemantic(opts: EmbedOptions = {}): Promise<SemanticSearcher | null> {
+  if (!embedAvailable(opts.env)) return null;
+  const backend = await semanticBackend();
+  if (!backend) return null;
+  return (query, topK) => semanticSearch(query, backend, topK, opts);
 }
 
 /**
@@ -52,7 +68,7 @@ export async function defaultSemantic(opts: EmbedOptions = {}): Promise<Semantic
  * → gsd-debugger, ranked #1-2 raw) must not be diluted by equal-weight RRF, which rewards cross-modality
  * consensus and buries single-modality strength. Weighting semantic ×2 surfaces the long-tail skill (DoD
  * item 5) while lexical/trigram still contribute (RET-05). Tuned via the BENCH-01 weight sweep: ×2 maximizes
- * MRR (0.604) + long-tail recall@10 (91%) while keeping flaky→debug in topK; ×3 had equal recall but lower
+ * MRR (0.562) + long-tail recall@10 (91%) while keeping flaky→debug in topK; ×3 had equal recall but lower
  * MRR, ×1 dropped flaky→debug out of topK entirely. See .planning/BENCHMARK.md.
  */
 const SEMANTIC_WEIGHT = 2;
