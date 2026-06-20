@@ -27,7 +27,8 @@ interface Stage {
 const BACKBONE: Stage[] = [
   { verb: "discuss", skill: "gsd-discuss-phase", pos: 10, gate: true, reason: "core: gather context + decisions (gate)" },
   { verb: "map-codebase", skill: "gsd-map-codebase", pos: 20, reason: "core: map existing code before planning" },
-  { verb: "plan", skill: "gsd-plan-phase", pos: 40, gate: true, reason: "core: research + plan (gate)" },
+  { verb: "research", skill: "gsd-plan-phase --research", pos: 30, reason: "core: research-first — investigate domain/APIs before planning (ENF-02)" },
+  { verb: "plan", skill: "gsd-plan-phase", pos: 40, gate: true, reason: "core: plan from research + context (gate)" },
   { verb: "execute", skill: "gsd-execute-phase", pos: 60, reason: "core: implement the plan" },
   { verb: "code-review", skill: "gsd-code-review", pos: 70, reason: "core: review changed code (ENF-05)" },
   { verb: "verify", skill: "gsd-verify-work", pos: 80, gate: true, reason: "core: goal-backward verification (gate)" },
@@ -42,6 +43,7 @@ const CONDITIONAL: { match: RegExp; stage: Stage }[] = [
   { match: /debug|debugger/, stage: { verb: "debug", skill: "gsd-debug", pos: 55, reason: "retrieval: bug/failure intent — systematic debug" } },
   { match: /secure|security/, stage: { verb: "secure", skill: "gsd-secure-phase", pos: 65, reason: "retrieval: security-sensitive — threat model" } },
   { match: /graphify|knowledge-graph/, stage: { verb: "graphify", skill: "gsd-graphify", pos: 85, reason: "retrieval: knowledge-graph request" } },
+  { match: /doc-writer|docs-update|documentation/, stage: { verb: "docs", skill: "gsd-docs-update", pos: 88, reason: "retrieval: documentation request — write/verify docs" } },
 ];
 
 export interface SelectPathInput {
