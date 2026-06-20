@@ -173,15 +173,23 @@ function verificationPassed(planningDir: string, phaseNum: string): boolean {
     } catch {
       continue;
     }
-    // CR-02: anchor the verdict to a line-anchored, delimited field value (mirroring
-    // hasUnresolvedVerificationFail) so prose like "the final verdict = passed by reviewer"
-    // no longer false-positives. Still matches `status: passed`, `Verdict: PASS`, `| PASS |`.
-    if (
-      /^[ \t]*(status|result|verdict|outcome)\b[ \t]*[:=][ \t]*"?\s*pass(ed)?\b/im.test(text) ||
-      /(^|\|)\s*PASS(ED)?\s*(\||$)/im.test(text)
-    ) {
-      return true;
+    // M-2: mirror hasUnresolvedVerificationFail exactly — split lines, skip `#` headings, and anchor the
+    // verdict to a field value or a delimited table cell. The old bare `(^|\|)PASS($)` alternative matched
+    // ANY standalone `PASS` line (incl. a `# PASSED` heading), a false-positive that could advance the route
+    // loop and make complete-milestone reachable prematurely.
+    let passed = false;
+    for (const raw of text.split("\n")) {
+      const ln = raw.trim();
+      if (ln.startsWith("#")) continue; // a heading is never a verdict
+      if (
+        /^(status|result|verdict|outcome)\b[ \t]*[:=][ \t]*"?\s*pass(ed)?\b/i.test(ln) ||
+        /^\|.*\bPASS(ED)?\b.*\|$/i.test(ln)
+      ) {
+        passed = true;
+        break;
+      }
     }
+    if (passed) return true;
   }
   return false;
 }

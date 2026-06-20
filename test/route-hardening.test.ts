@@ -62,3 +62,29 @@ test("H-02: route() does not throw when a phase dir is unreadable/racing", () =>
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("M-2: a bare 'PASS'/'# PASSED' heading is NOT a verification verdict (no premature complete)", () => {
+  // single-phase project, plans==summaries, but VERIFICATION.md has only a heading — not a real verdict.
+  function single(verif: string) {
+    const root = mkdtempSync(join(tmpdir(), "gsd-m2-"));
+    const planning = join(root, ".planning");
+    const pd = join(planning, "phases", "01-a");
+    mkdirSync(pd, { recursive: true });
+    writeFileSync(join(planning, "ROADMAP.md"), "### Phase 1: A\n**Goal:** g\n");
+    writeFileSync(join(pd, "01-01-PLAN.md"), "# plan\n");
+    writeFileSync(join(pd, "01-01-SUMMARY.md"), "# summary\n");
+    writeFileSync(join(pd, "1-VERIFICATION.md"), verif);
+    return { root, planning };
+  }
+  const bare = single("# PASSED\n\nnotes\n");
+  try {
+    const r = route(bare.planning);
+    assert.notEqual(r.action, "complete-milestone", "a bare PASS heading must not complete the milestone");
+    assert.equal(r.action, "verify-work");
+  } finally { rmSync(bare.root, { recursive: true, force: true }); }
+  // sanity: a REAL verdict does complete
+  const real = single("Status: passed\n");
+  try {
+    assert.equal(route(real.planning).action, "complete-milestone");
+  } finally { rmSync(real.root, { recursive: true, force: true }); }
+});

@@ -32,6 +32,7 @@ function scalar(value: string): string {
 
 /** Set a top-level scalar frontmatter field (creates the frontmatter block if absent). */
 export function setFrontmatterField(content: string, key: string, value: string): string {
+  content = content.replace(/\r\n/g, "\n"); // LF-normalize so CRLF files aren't silently mis-edited (WR-02)
   const fm = /^---\n([\s\S]*?)\n---/.exec(content);
   const quoted = scalar(value);
   // function replacers everywhere — a raw replacement string lets `$`-sequences in the value corrupt it (CR-1).
@@ -48,46 +49,64 @@ export function setFrontmatterField(content: string, key: string, value: string)
  *  and appends new keys; any non-direct-child line (deeper-nested block, comment) passes through verbatim so
  *  a nested structure is never destructively flattened (MED-2). */
 export function setProgressFields(content: string, fields: Record<string, number>): string {
+  content = content.replace(/\r\n/g, "\n"); // WR-02: CRLF would make the block regexes silently no-op
   const fm = /^---\n([\s\S]*?)\n---/.exec(content);
   if (!fm) return content;
   const block = fm[1];
-  const prog = /^progress:\n((?:[ \t]+.*\n?)*)/m.exec(block);
-  if (!prog) {
-    const rendered = "progress:\n" + Object.entries(fields).map(([k, v]) => `  ${k}: ${v}`).join("\n");
-    return content.replace(fm[1], () => block + "\n" + rendered);
+  // Array-based so the empty-block (WR-01) and progress-is-last-key (WR-03) cases can't duplicate the key
+  // or inject a stray blank line. Find the `progress:` line, consume its indented children, rebuild in place.
+  const lines = block.split("\n");
+  const pIdx = lines.findIndex((l) => /^progress:[ \t]*$/.test(l));
+  if (pIdx === -1) {
+    const rendered = ["progress:", ...Object.entries(fields).map(([k, v]) => `  ${k}: ${v}`)];
+    return content.replace(fm[1], () => [...lines, ...rendered].join("\n"));
   }
-  const baseIndent = /^([ \t]+)\S/m.exec(prog[1])?.[1] ?? "  ";
+  let end = pIdx + 1;
+  while (end < lines.length && /^[ \t]+/.test(lines[end])) end++;
+  const children = lines.slice(pIdx + 1, end);
+  const baseIndent = children.find((l) => /^[ \t]+\S/.test(l))?.match(/^([ \t]+)/)?.[1] ?? "  ";
   const childRe = new RegExp(`^${baseIndent}([\\w]+):[ \\t]*(.+)$`);
   const remaining = new Set(Object.keys(fields));
-  const lines = prog[1].replace(/\n$/, "").split("\n").map((ln) => {
+  const merged = children.map((ln) => {
     const m = childRe.exec(ln);
     if (m && m[1] in fields) {
       remaining.delete(m[1]);
       return `${baseIndent}${m[1]}: ${fields[m[1]]}`;
     }
-    return ln; // nested / comment / unknown — preserved verbatim
+    return ln; // nested / comment / unknown — preserved verbatim (MED-2)
   });
-  for (const k of remaining) lines.push(`${baseIndent}${k}: ${fields[k]}`);
-  const rebuilt = "progress:\n" + lines.join("\n");
-  const newBlock = block.replace(/^progress:\n(?:[ \t]+.*\n?)*/m, () => rebuilt + "\n");
+  for (const k of remaining) merged.push(`${baseIndent}${k}: ${fields[k]}`);
+  const newBlock = [...lines.slice(0, pIdx), "progress:", ...merged, ...lines.slice(end)].join("\n");
   return content.replace(fm[1], () => newBlock);
 }
 
 /** Append a line at the END of a `## <section>` body block (creates the section if absent). */
 export function appendUnderSection(content: string, section: string, line: string): string {
-  const head = new RegExp(`^## ${escapeRe(section)}[ \\t]*$`, "m");
-  const m = head.exec(content);
-  if (!m) {
+  content = content.replace(/\r\n/g, "\n");
+  const lines = content.split("\n");
+  const headRe = new RegExp(`^## ${escapeRe(section)}[ \\t]*$`);
+  const hIdx = lines.findIndex((l) => headRe.test(l));
+  if (hIdx === -1) {
     return content.replace(/\s*$/, "") + `\n\n## ${section}\n\n- ${line}\n`;
   }
-  // Find the section's extent: from after the heading to the next `## ` heading (or EOF), and append the new
-  // entry at the end of that block — true append, newest-last, consistent with the create path (MED-1).
-  const afterHead = m.index + m[0].length;
-  const rest = content.slice(afterHead);
-  const nextHead = /\n## /.exec(rest);
-  const sectionEnd = nextHead ? afterHead + nextHead.index : content.length;
-  const body = content.slice(afterHead, sectionEnd).replace(/\s*$/, "");
-  return content.slice(0, afterHead) + body + `\n- ${line}\n` + content.slice(sectionEnd);
+  // Find the section end: the next top-level `## ` heading NOT inside a code fence (a `## ` line inside a
+  // ``` fence is body, not a boundary — WR-04). Then append the entry after the section's last non-blank line.
+  let inFence = false;
+  let end = lines.length;
+  for (let i = hIdx + 1; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (t.startsWith("```") || t.startsWith("~~~")) {
+      inFence = !inFence;
+      continue;
+    }
+    if (!inFence && /^## /.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  let last = end;
+  while (last > hIdx + 1 && lines[last - 1].trim() === "") last--; // trim trailing blanks within the section
+  return [...lines.slice(0, last), `- ${line}`, ...lines.slice(last)].join("\n");
 }
 
 /* ---- The GSD state.* mutation verbs (lock-protected, atomic) ---- */

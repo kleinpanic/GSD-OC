@@ -93,3 +93,10 @@ test("applyGsdAgentsMd writes the file and is idempotent on disk", async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("M-1: a corrupt GSD block (BEGIN, no END) preserves user content below it", () => {
+  const corrupt = "# AGENTS.md\n\n<!-- gsd-oc:begin (managed — do not edit between markers) -->\nold block\n\n## My persona\nCritical user content.\n";
+  const out = mergeGsdSection(corrupt);
+  assert.ok(out.includes("My persona"), "user persona below a corrupt block is preserved");
+  assert.ok(out.includes("Critical user content."), "user content not deleted");
+});

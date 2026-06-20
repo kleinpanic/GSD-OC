@@ -96,7 +96,7 @@ export function selectPath(input: SelectPathInput): PathStep[] {
   // classifyIntent("") → chat, which is NOT quick, so it would otherwise fall through to the full
   // backbone. Return an empty path so callers (and executePath) can distinguish "nothing to do".
   if (input.intent.trim().length === 0) return [];
-  const intent = input.intent.toLowerCase();
+  const intent = input.intent.slice(0, 8192).toLowerCase(); // L-2: bound regex work on the intent
   const topIds = input.retrieved.slice(0, CONSENSUS_TOP).map((r) => r.docId.toLowerCase());
   // Complexity tier: a "quick" intent gets the minimal path; substantial work gets the full backbone.
   const category = classifyIntent(input.intent).category;

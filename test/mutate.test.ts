@@ -103,3 +103,29 @@ test("MED-4: a multiline value collapses to one YAML line", () => {
   assert.match(out, /status: "line1 line2"/);
   assert.ok(!/status: "line1\nline2"/.test(out), "no raw newline in scalar");
 });
+
+test("WR-01: empty progress block is FILLED, not duplicated", () => {
+  const out = setProgressFields("---\nstatus: planning\nprogress:\n---\n", { total_plans: 5 });
+  assert.equal((out.match(/progress:/g) || []).length, 1, "exactly one progress: key");
+  assert.match(out, /progress:\n  total_plans: 5/);
+});
+
+test("WR-02: CRLF input is not a silent no-op", () => {
+  const crlf = "---\r\nstatus: planning\r\nprogress:\r\n  completed_plans: 1\r\n---\r\n";
+  const out = setProgressFields(crlf, { completed_plans: 7 });
+  assert.match(out, /completed_plans: 7/, "CRLF update applied");
+});
+
+test("WR-03: progress as the LAST frontmatter key adds no stray blank line", () => {
+  const out = setProgressFields("---\nstatus: planning\nprogress:\n  total_plans: 2\n---\n", { total_plans: 3 });
+  assert.ok(!/\n\n---/.test(out), "no blank line before closing ---");
+  assert.match(out, /total_plans: 3/);
+});
+
+test("WR-04: appendUnderSection does not append inside a code fence", () => {
+  const withFence = "## Decisions\n\n- a\n\n```\n## not a heading\n```\n";
+  const out = appendUnderSection(withFence, "Decisions", "b");
+  // the new entry lands after the fence's closing ```, still within Decisions (no later real heading)
+  assert.match(out, /```\n- b/, "appended after the fence, fence intact");
+  assert.equal((out.match(/```/g) || []).length, 2, "both fence delimiters preserved");
+});

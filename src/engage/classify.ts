@@ -96,7 +96,9 @@ function classifyBody(text: string): IntentResult {
 }
 
 export function classifyIntent(prompt: string): IntentResult {
-  const text = (prompt ?? "").trim().toLowerCase();
+  // L-2 defense-in-depth: clamp before running the rule regexes (mirrors retrieve's 8192 guard). The
+  // patterns are linear (no nested quantifiers), so this is a bound on work, not a ReDoS fix.
+  const text = (prompt ?? "").slice(0, 8192).trim().toLowerCase();
   if (text.length === 0) return CHAT;
   // Gratitude / closing pleasantries are pure chat regardless of trailing words.
   if (GRATITUDE_RE.test(text)) return CHAT;

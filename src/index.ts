@@ -310,7 +310,7 @@ const entry = definePluginEntry({
         // Best-effort project resolution: walk up from cwd to a .planning root. The tool execute context
         // carries NO workspaceDir (SDK limit), so when cwd isn't the workspace (gateway home) this falls
         // back to cwd-relative .planning. The robust state-advance channel is agent_end (workspaceDir) — SDK-03.
-        const root = gsdProjectRoot(process.cwd());
+        const root = gsdProjectRoot(process.cwd()); // single walk reused below (IN-01)
         const dir = root ? `${root}/.planning` : ".planning";
         try {
           switch (args?.op) {
