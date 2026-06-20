@@ -131,6 +131,31 @@ function hasUnresolvedVerificationFail(planningDir: string, phases: RoadmapPhase
   return false;
 }
 
+/**
+ * True iff the phase has a VERIFICATION.md whose status is `passed` (the explicit "verification passed"
+ * state transition codex F2 found missing — without it, complete-milestone is unreachable).
+ */
+function verificationPassed(planningDir: string, phaseNum: string): boolean {
+  const dir = phaseDirFor(planningDir, phaseNum);
+  if (!dir) return false;
+  let files: string[];
+  try {
+    files = fs.readdirSync(dir).filter((f) => f.endsWith("VERIFICATION.md"));
+  } catch {
+    return false;
+  }
+  for (const f of files) {
+    let text: string;
+    try {
+      text = fs.readFileSync(path.join(dir, f), "utf8");
+    } catch {
+      continue;
+    }
+    if (/^status:[ \t]*"?\s*passed\b/im.test(text) || /\bverdict\b\s*[:=]\s*"?\s*pass(ed)?\b/i.test(text)) return true;
+  }
+  return false;
+}
+
 export function route(planningDir: string): RouteResult {
   // ── Hard-stop gates (next.md §38-84) — fire before any forward route ──
   // Gate 1: unresolved checkpoint.
@@ -224,6 +249,9 @@ export function route(planningDir: string): RouteResult {
       // current phase's plans all have summaries; we surface it here.
       const isLast = ordered[ordered.length - 1].number === ph.number;
       if (isLast) {
+        // codex F2: only return verify-work until verification PASSES; once it passes, the last phase is
+        // truly complete → fall through so Route 7 (complete-milestone) becomes reachable.
+        if (verificationPassed(planningDir, ph.number)) break;
         return { route: 5, action: "verify-work", phase: ph.number, reason: "all-summaries" };
       }
       // Not last: this phase is complete; advance to discuss the next phase (Route 6) only
