@@ -126,13 +126,13 @@ const entry = definePluginEntry({
       description:
         "Route a coding/big-work intent through the GSD lifecycle by dispatching the appropriate GSD subagent.",
       parameters: orchestrateParams,
-      async execute(params: { intent?: string }) {
+      async execute(_toolCallId: string, args: { intent?: string }, _signal?: unknown) {
         const state = await readState(".planning");
         return {
           engaged: true,
           current_phase: state.current_phase,
           current_phase_name: state.current_phase_name,
-          intent: params?.intent ?? null,
+          intent: args?.intent ?? null,
         };
       },
     } as never);
@@ -146,10 +146,12 @@ const entry = definePluginEntry({
       description:
         "Retrieve the most relevant GSD skills/subagents for a free-text intent via hybrid semantic+lexical+trigram search. Surfaces long-tail skills the routers miss (e.g. 'the build is flaky' → gsd-debug).",
       parameters: retrieveParams,
-      async execute(params: { intent?: string; topK?: number }) {
-        const intent = (params?.intent ?? "").trim();
+      // OpenClaw invokes registerTool execute as (toolCallId, args, signal, onUpdate) — args is the 2nd
+      // param (verified against the bundled file-transfer tool + SDK runner). Reading args, NOT the callId.
+      async execute(_toolCallId: string, args: { intent?: string; topK?: number }, _signal?: unknown) {
+        const intent = (args?.intent ?? "").trim();
         if (!intent) return { intent: "", results: [] };
-        const docs = await retrieve(intent, { topK: params?.topK ?? 8 });
+        const docs = await retrieve(intent, { topK: args?.topK ?? 8 });
         return { intent, results: docs.map((r) => ({ id: r.docId, kind: r.kind, title: r.title, score: r.score })) };
       },
     } as never);

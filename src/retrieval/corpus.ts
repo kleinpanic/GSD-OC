@@ -19,16 +19,22 @@ import type { GsdCorpus } from "./types.js";
 let cached: GsdCorpus | undefined;
 
 function corpusPath(): string {
+  // 1. SHIPPED / self-contained: artifact bundled next to the compiled module (dist/retrieval/).
+  // This is the runtime path — reads ONLY the plugin's own bundled data (RET-01).
+  const local = fileURLToPath(new URL("./corpus.generated.json", import.meta.url));
+  if (existsSync(local)) return local;
+  // 2. DEV/TEST fallback: the source copy under the repo root (artifact not yet copied into dist).
   let dir = dirname(fileURLToPath(import.meta.url));
   for (let i = 0; i < 8; i++) {
     if (existsSync(join(dir, "package.json"))) {
-      return join(dir, "src", "retrieval", "corpus.generated.json");
+      const src = join(dir, "src", "retrieval", "corpus.generated.json");
+      if (existsSync(src)) return src;
     }
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
-  throw new Error("loadCorpus: could not locate repo root from " + import.meta.url);
+  throw new Error("loadCorpus: corpus.generated.json not found next to module or under repo root");
 }
 
 export function loadCorpus(): GsdCorpus {

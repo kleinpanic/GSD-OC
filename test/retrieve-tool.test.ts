@@ -4,7 +4,11 @@ import entry from "../src/index.js";
 
 interface CapturedTool {
   name: string;
-  execute: (p: { intent?: string; topK?: number }) => Promise<{ intent: string; results: { id: string }[] }>;
+  execute: (
+    toolCallId: string,
+    args: { intent?: string; topK?: number },
+    signal?: unknown,
+  ) => Promise<{ intent: string; results: { id: string }[] }>;
 }
 
 function captureApi() {
@@ -40,11 +44,12 @@ test("RET-07: gsd_retrieve is registered as a 0-slot tool and returns ranked GSD
     const tool = api.tools.find((t) => t.name === "gsd_retrieve");
     assert.ok(tool, "gsd_retrieve is registered via registerTool");
 
-    const out = await tool!.execute({ intent: "plan the next phase", topK: 5 });
+    // OpenClaw calls execute(toolCallId, args, signal) — args is the 2nd param.
+    const out = await tool!.execute("call-1", { intent: "plan the next phase", topK: 5 });
     assert.ok(Array.isArray(out.results) && out.results.length > 0, "returns ranked results");
     assert.ok(out.results.every((r) => typeof r.id === "string"));
 
-    const empty = await tool!.execute({ intent: "   " });
+    const empty = await tool!.execute("call-2", { intent: "   " });
     assert.deepEqual(empty.results, [], "blank intent returns no results");
   } finally {
     if (saved.u) process.env.SPARK_EMBEDDINGS_BASE_URL = saved.u;

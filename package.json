@@ -18,7 +18,9 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-artifacts.mjs",
+    "build:corpus": "node --experimental-strip-types scripts/build-corpus.ts",
+    "build:vectors": "node --experimental-strip-types scripts/build-vectors.ts",
     "test": "tsc -p tsconfig.test.json && node --test \"dist-test/test/*.test.js\""
   },
   "dependencies": {
