@@ -59,6 +59,10 @@ every milestone the top-level Claude is the GSD orchestrator/delegator** — it 
 | **M3 — Benchmark & Behavior** | 13 | BENCH-01..05 | openclaw-CLI/minimax-M3 run + A/B + block-and-steer, logged |
 | **M4 — Goal Integration + Deferrals** | 14–15 | GOAL-01, DEF | `/goal` don't-stop loop within GSD; v1.0 deferrals closed |
 
+Each milestone is a **proper GSD version**: **M1 = v1.1 (ACTIVE), M2 = v1.2, M3 = v1.3, M4 = v1.4** —
+each promoted to its own GSD milestone via `/gsd-new-milestone` when reached. Today only **v1.1 / M1** is
+active in GSD state, so **start with M1** (paste the M1 `/goal` below; Phase 8 is already done → next Phase 9).
+
 ### GOAL B — milestone `/goal` prompts (paste ONE per session, each ≤4000 chars)
 
 **M1 — Retrieval Core**
