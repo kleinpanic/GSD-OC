@@ -79,9 +79,12 @@ export async function writeLanceTable(
   await db.createTable(table, data, { mode: "overwrite" });
 }
 
-/* ---- Build-artifact (gitignored, shipped in dist) location + (de)serialization ---- */
+/* ---- Build-artifact location + (de)serialization ----
+ * WRITE goes to the source repo (src/retrieval/, gitignored); the build copies artifacts into
+ * dist/retrieval/. READ prefers the copy bundled next to the compiled module (dist/retrieval/) so the
+ * runtime is self-contained (RET-01), falling back to the source copy in dev/test. */
 
-function retrievalDir(): string {
+function sourceRetrievalDir(): string {
   let dir = dirname(fileURLToPath(import.meta.url));
   for (let i = 0; i < 8; i++) {
     if (existsSync(join(dir, "package.json"))) return join(dir, "src", "retrieval");
@@ -92,8 +95,14 @@ function retrievalDir(): string {
   throw new Error("vectors: could not locate repo root from " + import.meta.url);
 }
 
-export function vectorArtifactPaths(): { bin: string; index: string; lance: string; manifest: string } {
-  const d = retrievalDir();
+function bundledRetrievalDir(): string {
+  const local = dirname(fileURLToPath(import.meta.url));
+  if (existsSync(join(local, "vectors.index.json")) || existsSync(join(local, "lancedb"))) return local;
+  return sourceRetrievalDir();
+}
+
+export function vectorArtifactPaths(forWrite = false): { bin: string; index: string; lance: string; manifest: string } {
+  const d = forWrite ? sourceRetrievalDir() : bundledRetrievalDir();
   return {
     bin: join(d, "vectors.generated.bin"),
     index: join(d, "vectors.index.json"),
@@ -102,8 +111,8 @@ export function vectorArtifactPaths(): { bin: string; index: string; lance: stri
   };
 }
 
-/** Load the normalized vector matrix from the build artifact, or null if not built yet. */
-export function loadVectorCache(paths: { bin: string; index: string } = vectorArtifactPaths()): VectorCache | null {
+/** Load the normalized vector matrix from the bundled (runtime) artifact, or null if not built yet. */
+export function loadVectorCache(paths: { bin: string; index: string } = vectorArtifactPaths(false)): VectorCache | null {
   if (!existsSync(paths.bin) || !existsSync(paths.index)) return null;
   const idx = JSON.parse(readFileSync(paths.index, "utf8")) as { dim: number; chunkIds: string[] };
   const buf = readFileSync(paths.bin);
@@ -114,7 +123,7 @@ export function loadVectorCache(paths: { bin: string; index: string } = vectorAr
 /** Persist normalized vectors as a Float32 .bin + a chunkId index (build-time). */
 export function writeVectorCache(
   rows: { chunkId: string; vector: number[] }[],
-  paths: { bin: string; index: string } = vectorArtifactPaths(),
+  paths: { bin: string; index: string } = vectorArtifactPaths(true),
 ): void {
   const dim = rows[0]?.vector.length ?? 0;
   const matrix = new Float32Array(rows.length * dim);

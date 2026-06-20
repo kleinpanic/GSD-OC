@@ -18,8 +18,8 @@ import { writeVectorCache, writeLanceTable, vectorArtifactPaths, loadVectorCache
 
 export async function generateVectors(): Promise<{ rows: number; dim: number; reembedded: number; reused: number }> {
   const corpus = loadCorpus();
-  const paths = vectorArtifactPaths();
-  const prior = loadVectorCache();
+  const paths = vectorArtifactPaths(true);
+  const prior = loadVectorCache(paths);
   const cache = new Map<string, number[]>();
   if (prior) {
     for (let r = 0; r < prior.chunkIds.length; r++) {
