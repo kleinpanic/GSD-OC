@@ -14,6 +14,7 @@
   "contracts": {
     "tools": [
       "gsd_orchestrate",
+      "gsd_retrieve",
       "gsd_workflow",
       "gsd_project",
       "gsd_quality",
