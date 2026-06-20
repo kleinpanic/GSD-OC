@@ -24,8 +24,11 @@ function sections(text: string, fallbackHeading: string): Section[] {
     if (body.length > 0) out.push({ heading, body });
     buf = [];
   };
+  let inFence = false;
   for (const line of text.split("\n")) {
-    const m = HEADING.exec(line);
+    const fence = /^\s*(```|~~~)/.test(line);
+    if (fence) inFence = !inFence;
+    const m = inFence || fence ? null : HEADING.exec(line);
     if (m) {
       flush();
       heading = m[2];
@@ -37,9 +40,25 @@ function sections(text: string, fallbackHeading: string): Section[] {
   return out;
 }
 
+/** Hard-split an oversized string on a whitespace boundary into <= maxChars pieces. */
+function hardSplit(s: string, maxChars: number): string[] {
+  const pieces: string[] = [];
+  let rest = s;
+  while (rest.length > maxChars) {
+    let cut = rest.lastIndexOf(" ", maxChars);
+    if (cut <= 0) cut = maxChars; // no whitespace boundary — slice hard
+    pieces.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest.length > 0) pieces.push(rest);
+  return pieces;
+}
+
 /** Pack paragraphs (blank-line separated) into <= maxChars pieces without splitting one. */
 function packParagraphs(body: string, maxChars: number): string[] {
-  const paras = body.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const raw = body.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  // A single paragraph longer than maxChars can never fit; hard-split it first.
+  const paras = raw.flatMap((p) => (p.length > maxChars ? hardSplit(p, maxChars) : [p]));
   const pieces: string[] = [];
   let cur = "";
   for (const p of paras) {

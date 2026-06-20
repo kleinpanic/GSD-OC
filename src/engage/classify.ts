@@ -18,8 +18,19 @@ export type IntentResult = { engage: boolean; category: string; reason: string }
 
 const CHAT: IntentResult = { engage: false, category: "chat", reason: "chat/quick one-off — no GSD work verb" };
 
-/** Greetings / pleasantries that are pure chat regardless of anything else. */
-const GREETING_RE = /^(hi|hello|hey|yo|sup|thanks|thank you|good (morning|afternoon|evening|night)|how are you|how's it going)\b/;
+/**
+ * Gratitude / closing pleasantries that are pure chat regardless of what follows — these
+ * reference completed work, never a forward request ("thanks for building that"). They are
+ * NOT stripped-and-reclassified (a trailing "building that" is acknowledgement, not a verb).
+ */
+const GRATITUDE_RE = /^(thanks|thank you|how are you|how's it going)\b/;
+
+/**
+ * Conversational openers that may PREFIX a real request ("hi, please build X"). When matched,
+ * the opener + leading punctuation is stripped and the remainder is re-classified (CR greeting
+ * swallow fix); a bare opener with no remainder is CHAT.
+ */
+const GREETING_RE = /^(hi|hello|hey|yo|sup|good (morning|afternoon|evening|night))\b/;
 
 /**
  * L-01: interrogative framings that are conversational ("how does X work", "what do
@@ -42,15 +53,19 @@ const RULES: Array<{ re: RegExp; category: string; reason: string; weak?: boolea
   // map (do.md:44)
   { re: /\bmap\b.*\b(codebase|repo|project)\b|\bmap the\b/, category: "map", reason: "codebase mapping (do.md:44)" },
   // debug (do.md:45)
-  { re: /\b(debug|crash|error|failure|broken|broke|stack ?trace|exception|regression)\b/, category: "debug", reason: "bug/error/crash signal (do.md:45)" },
+  { re: /\b(bug|debug\w*|flaky|fail\w*|broken|broke|crash\w*|error|reproduce|intermittent|stack ?trace|exception|regression)\b/, category: "debug", reason: "bug/error/crash signal (do.md:45)" },
   // plan (do.md:53)
   { re: /\bplan\b.*\bphase\b|\bplan phase\b/, category: "plan", reason: "phase planning (do.md:53)" },
   // execute (do.md:54)
   { re: /\b(execute|run)\b.*\bphase\b/, category: "execute", reason: "phase execution (do.md:54)" },
   // phase — explicit multi-file architecture / refactor / migration / redesign (do.md:52)
   { re: /\b(refactor|migrat(e|ion)|redesign|re-?architect|architecture)\b/, category: "phase", reason: "multi-file architecture/refactor/migration (do.md:52)" },
-  // phase — substantial build verbs (feature/api/service)
-  { re: /\b(build|implement|create|develop|design)\b/, category: "phase", reason: "coding/big-work build verb (do.md:52/62)" },
+  // phase — security/audit work (gsd-secure-phase): auditing/hardening is substantial GSD work.
+  { re: /\b(audit|secur\w*|vulnerab\w*|harden|pentest|threat model)\b/, category: "phase", reason: "security/audit work (gsd-secure-phase)" },
+  // phase — substantial build verbs (feature/api/service). WEAK (L-01/WR-02): the noun
+  // "the build" in a question framing ("what does the build do?") must NOT engage; a real
+  // request without a question frame ("build a new service") still fires.
+  { re: /\b(build|implement|create|develop|design)\b/, category: "phase", reason: "coding/big-work build verb (do.md:52/62)", weak: true },
   // quick — specific actionable small task (do.md:62)
   { re: /\b(add|update|change|remove|delete|rename|tweak|adjust|wire|hook up|fix)\b/, category: "quick", reason: "specific actionable task (do.md:62)" },
   // phase (WEAK) — loose "the system/whole/entire" architecture cue. L-01: exclude
@@ -61,11 +76,9 @@ const RULES: Array<{ re: RegExp; category: string; reason: string; weak?: boolea
   { re: /\b(do|make|work)\b/, category: "quick", reason: "actionable work verb (do.md:62)", weak: true },
 ];
 
-export function classifyIntent(prompt: string): IntentResult {
-  const text = (prompt ?? "").trim().toLowerCase();
+/** Match the work-verb rules against `text`. Returns an engaging result or CHAT. */
+function classifyBody(text: string): IntentResult {
   if (text.length === 0) return CHAT;
-  if (GREETING_RE.test(text)) return CHAT;
-
   const isQuestionFrame = QUESTION_FRAME_RE.test(text);
   for (const rule of RULES) {
     if (rule.weak && isQuestionFrame) continue; // L-01: weak heuristics yield to chat framing
@@ -73,7 +86,23 @@ export function classifyIntent(prompt: string): IntentResult {
       return { engage: true, category: rule.category, reason: rule.reason };
     }
   }
-
   // No work verb matched → standalone question / chatter → skip.
   return CHAT;
+}
+
+export function classifyIntent(prompt: string): IntentResult {
+  const text = (prompt ?? "").trim().toLowerCase();
+  if (text.length === 0) return CHAT;
+  // Gratitude / closing pleasantries are pure chat regardless of trailing words.
+  if (GRATITUDE_RE.test(text)) return CHAT;
+  // A leading greeting ("hi, please build X") must NOT swallow a real request: strip the
+  // greeting + leading punctuation and re-classify the remainder. Empty remainder → CHAT;
+  // otherwise the remainder's classification governs (CR greeting-swallow fix).
+  if (GREETING_RE.test(text)) {
+    const remainder = text.replace(GREETING_RE, "").replace(/^[\s,.!:;-]+/, "").trim();
+    if (remainder.length === 0) return CHAT;
+    return classifyBody(remainder);
+  }
+
+  return classifyBody(text);
 }

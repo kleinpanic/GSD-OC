@@ -58,3 +58,23 @@ test("respects the pluginConfig opt-out (c)", () => {
   const c = ctx({ cfg: { plugins: { entries: { "gsd-oc": { config: { disabled: true } } } } } });
   assert.equal(decideBootstrapInjection(c), null);
 });
+
+test("reuses canonical merge: existing '# AGENTS.md' title stays the first line (WR-03)", () => {
+  const c = ctx({ bootstrapFiles: [agentsFile("# AGENTS.md\n\nHost persona\n")] });
+  const d = decideBootstrapInjection(c)!;
+  assert.ok(d.content.startsWith("# AGENTS.md"), "title must remain the first line");
+  assert.ok(d.content.includes("Host persona"), "host persona preserved");
+  assert.ok(
+    d.content.indexOf("gsd-oc:begin") > d.content.indexOf("# AGENTS.md"),
+    "GSD block sits after the title, not before it",
+  );
+});
+
+test("double-invoke on the same bootstrapFiles yields exactly ONE GSD block (WR-03)", () => {
+  const beginRe = /gsd-oc:begin/g;
+  const event = { context: ctx({ bootstrapFiles: [agentsFile("# AGENTS.md\n\nHost persona\n")] }) };
+  gsdBootstrapHandler(event);
+  gsdBootstrapHandler(event); // second pass must be a no-op (already injected)
+  const agents = event.context.bootstrapFiles.find((f) => f.name === "AGENTS");
+  assert.equal((agents?.content?.match(beginRe) || []).length, 1, "exactly one managed block");
+});

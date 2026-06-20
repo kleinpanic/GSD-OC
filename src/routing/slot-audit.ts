@@ -98,3 +98,17 @@ export function auditSlots(manifestPath = "openclaw.plugin.json"): SlotAudit {
     manifestToolCount: tools,
   };
 }
+
+/**
+ * WR-01: enforce the 0-slot invariant. `auditSlots` only REPORTS the surface; callers
+ * (CI / startup) call this to FAIL when any Discord global slash slot would be consumed —
+ * either via a manifest `commands[]` entry or a runtime `registerCommand` call.
+ */
+export function assertZeroSlots(audit: SlotAudit): void {
+  if (audit.manifestCommandCount > 0 || audit.registerCommandCalls > 0) {
+    throw new Error(
+      `0-slot invariant violated: manifestCommandCount=${audit.manifestCommandCount}, ` +
+        `registerCommandCalls=${audit.registerCommandCalls} (both must be 0)`,
+    );
+  }
+}

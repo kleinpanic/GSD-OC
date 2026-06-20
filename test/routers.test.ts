@@ -22,6 +22,17 @@ test("router matches intent to a concrete verb within its namespace", () => {
   assert.equal(routeIntent(wf, "").matched, null);
 });
 
+test("WR-02 regression: routeIntent matches whole words, not raw substrings", () => {
+  const wf = ROUTERS.find((r) => r.name === "gsd_workflow")!;
+  const mng = ROUTERS.find((r) => r.name === "gsd_manage")!;
+  // "planet" must NOT match "plan"; "threadbare" must NOT match "thread".
+  assert.equal(routeIntent(wf, "send a planet photo").matched, null);
+  assert.equal(routeIntent(mng, "this is threadbare").matched, null);
+  // A real word-boundary intent still matches.
+  assert.equal(routeIntent(wf, "plan the next phase").matched, "plan");
+  assert.equal(routeIntent(mng, "start a thread").matched, "thread");
+});
+
 test("buildRouterTools produces 6 callable tool descriptors with params", () => {
   const tools = buildRouterTools();
   assert.equal(tools.length, 6);

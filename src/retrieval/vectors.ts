@@ -19,7 +19,10 @@ export interface VectorCache {
 
 export function normalizeInto(v: number[] | Float32Array): Float32Array {
   let norm = 0;
-  for (let i = 0; i < v.length; i++) norm += v[i] * v[i];
+  for (let i = 0; i < v.length; i++) {
+    if (!Number.isFinite(v[i])) throw new Error("non-finite vector component");
+    norm += v[i] * v[i];
+  }
   norm = Math.sqrt(norm) || 1;
   const out = new Float32Array(v.length);
   for (let i = 0; i < v.length; i++) out[i] = v[i] / norm;
@@ -48,7 +51,7 @@ export class CosineBackend implements VectorBackend {
       scored.push({ chunkId: chunkIds[r], score: dot });
     }
     scored.sort((a, b) => b.score - a.score || (a.chunkId < b.chunkId ? -1 : 1));
-    return scored.slice(0, topK);
+    return scored.slice(0, Math.max(0, topK));
   }
 }
 

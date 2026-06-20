@@ -61,12 +61,33 @@ test("L-03: extractAssistantText flags a string/array reply as parsed", () => {
     text: "hi",
     parsed: true,
   });
-  // A recognized array-of-parts assistant message that is genuinely empty:
-  // parsed:true, text:"" — the agent said nothing, NOT parser drift.
+  // CR-02 (MT-03 update): an array with no text parts is NOT a real reply. The previous
+  // assertion expected parsed:true here — that tested the wrong behavior. Per the L-03
+  // contract a tool-result-only / empty-array final message is parser drift (parsed:false)
+  // so the caller keeps scanning earlier messages.
   assert.deepEqual(extractAssistantText([{ role: "assistant", content: [] }]), {
     text: "",
-    parsed: true,
+    parsed: false,
   });
+});
+
+// ── CR-02 (MT-03): tool_use-only final message is drift; scanning falls back to real text ──
+
+test("CR-02/MT-03: a tool_use-only final assistant message reads as drift (parsed:false)", () => {
+  assert.deepEqual(
+    extractAssistantText([{ role: "assistant", content: [{ type: "tool_use", id: "x" }] }]),
+    { text: "", parsed: false },
+  );
+});
+
+test("CR-02/MT-03: scanning skips an empty-array reply to an earlier real assistant text", () => {
+  assert.deepEqual(
+    extractAssistantText([
+      { role: "assistant", content: "real" },
+      { role: "assistant", content: [] },
+    ]),
+    { text: "real", parsed: true },
+  );
 });
 
 test("L-03: an unrecognized assistant content shape is parsed:false (parser drift)", () => {
@@ -91,4 +112,28 @@ test("L-03: runSubagent surfaces the parsed flag so callers tell empty from unde
   assert.equal(res.status, "ok");
   assert.equal(res.text, "");
   assert.equal(res.parsed, false, "undecodable assistant shape must report parsed:false");
+});
+
+// ── CR-01 (MT-04): no session leak when waitForRun throws after a successful run() ──
+
+test("CR-01/MT-04: deleteSession runs exactly once even when waitForRun throws (no leak)", async () => {
+  const { api, calls } = mockApi();
+  api.runtime.subagent.waitForRun = async () => {
+    throw new Error("wait exploded");
+  };
+  await assert.rejects(
+    () => runSubagent(api, "gsd-executor", "go"),
+    /wait exploded/,
+    "the thrown error propagates",
+  );
+  assert.equal(calls.del.length, 1, "session must still be cleaned up exactly once (finally)");
+});
+
+// ── MT-06: sub-lane sessionKey when a baseAgentId is supplied ──
+
+test("MT-06: baseAgentId nests the persona as a sub-lane (agent:<base>:<gsd-role>)", async () => {
+  const { api, calls } = mockApi();
+  await runSubagent(api, "gsd-executor", "msg", { baseAgentId: "dev" });
+  const runParams = calls.run[0] as { sessionKey: string };
+  assert.equal(runParams.sessionKey, "agent:dev:gsd-executor");
 });

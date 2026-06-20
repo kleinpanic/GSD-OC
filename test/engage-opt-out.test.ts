@@ -56,6 +56,25 @@ test("parseToggle: off/on/null (D-03)", () => {
   assert.equal(parseToggle(""), null);
 });
 
+test("parseToggle: directive-shape anchor rejects incidental 'gsd on' (WR-04)", () => {
+  // "is gsd on the roadmap" is a question, not a directive — must NOT toggle.
+  assert.equal(parseToggle("is gsd on the roadmap"), null);
+  // Leading directive still wins; "first match" resolves a contradictory tail.
+  assert.equal(parseToggle("gsd off then on"), "off");
+});
+
+test("hasGsdOffMarker: .gsd-off in a PARENT dir suppresses a child cwd (WR-02)", () => {
+  const root = tmpProject();
+  try {
+    writeFileSync(join(root, ".gsd-off"), "");
+    const child = join(root, "packages", "foo");
+    mkdirSync(child, { recursive: true });
+    assert.equal(hasGsdOffMarker(child), true, "ancestor .gsd-off opts the subdir out");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("optedOut: each mechanism independently suppresses (ENG-03)", () => {
   const dir = tmpProject();
   try {

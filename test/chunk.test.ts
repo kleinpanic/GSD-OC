@@ -38,3 +38,20 @@ test("chunkDoc yields one title chunk for a heading-only doc", () => {
   assert.equal(chunks.length, 1);
   assert.equal(chunks[0].ordinal, 0);
 });
+
+test("chunkDoc does not treat '# comment' inside a fenced block as a heading", () => {
+  const d = doc("## Real Section\n\n```sh\n# comment line\necho hi\n```\n\nAfter fence.");
+  const chunks = chunkDoc(d);
+  const headings = new Set(chunks.map((c) => c.heading));
+  assert.ok(headings.has("Real Section"), "real heading present");
+  assert.ok(!headings.has("comment line"), "fenced '# comment' leaked as a section heading");
+});
+
+test("chunkDoc hard-splits a single paragraph larger than maxChars", () => {
+  const maxChars = 1200;
+  const words = Array(Math.ceil((maxChars + 500) / 5)).fill("word").join(" ");
+  const d = doc(`## S\n\n${words}`);
+  const chunks = chunkDoc(d, maxChars);
+  assert.ok(chunks.length >= 2, `expected >=2 chunks, got ${chunks.length}`);
+  assert.ok(chunks.every((c) => c.text.length <= maxChars), "a chunk exceeded maxChars");
+});

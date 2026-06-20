@@ -67,3 +67,50 @@ test("classifyIntent is deterministic and case-insensitive", () => {
   );
   assert.deepEqual(classifyIntent("hi"), classifyIntent("hi"));
 });
+
+test("greeting prefix does NOT swallow a real request (CR greeting-swallow)", () => {
+  const r = classifyIntent("hi, please build X");
+  assert.equal(r.engage, true, "remainder after greeting must classify");
+  assert.equal(r.category, "phase", "build verb in remainder → phase");
+});
+
+test("gratitude stays chat even when it references built work", () => {
+  const r = classifyIntent("thanks for building that");
+  assert.equal(r.engage, false);
+  assert.equal(r.category, "chat");
+});
+
+test("debug regex aligned: failure/bug/flaky/reproduce signals → debug (CR-01)", () => {
+  for (const prompt of [
+    "hey can you debug this error",
+    "the parser fails",
+    "the test is flaky",
+    "there is a bug in checkout",
+    "reproduce the issue",
+  ]) {
+    const r = classifyIntent(prompt);
+    assert.equal(r.engage, true, `expected engage for "${prompt}"`);
+    assert.equal(r.category, "debug", `expected debug for "${prompt}"`);
+  }
+});
+
+test("'the build' noun in a question does NOT engage (WR-02 weak build rule)", () => {
+  const r = classifyIntent("what does the build do?");
+  assert.equal(r.engage, false);
+  assert.equal(r.category, "chat");
+});
+
+test("'build a new service' (no question frame) still engages (WR-02 regression)", () => {
+  const r = classifyIntent("build a new service");
+  assert.equal(r.engage, true);
+  assert.equal(r.category, "phase");
+});
+
+test("'how do I fix the build?' engages via the strong fix verb", () => {
+  // Question frame suppresses weak build, but `fix` is a strong quick verb that survives.
+  assert.equal(classifyIntent("how do I fix the build?").engage, true);
+});
+
+test("debug classification is case-insensitive (FIX THE BUG == fix the bug)", () => {
+  assert.deepEqual(classifyIntent("FIX THE BUG"), classifyIntent("fix the bug"));
+});

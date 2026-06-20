@@ -63,3 +63,18 @@ test("'the build is flaky' ranks the flaky-bearing chunks (lexical reach, L7)", 
   const found = hits.some((h) => /flaky/i.test(idToText.get(h.chunkId) ?? ""));
   assert.ok(found, "expected at least one 'flaky'-bearing chunk in BM25 top-20");
 });
+
+test("empty index searches to []", () => {
+  assert.deepEqual(bm25Search(buildBm25([]), "anything", 5), []);
+});
+
+test("negative topK returns [] (not all-but-last)", () => {
+  const idx = buildBm25([chunk("a#0", "alpha"), chunk("b#0", "alpha")]);
+  assert.deepEqual(bm25Search(idx, "alpha", -1), []);
+});
+
+test("an empty-text chunk never matches", () => {
+  const idx = buildBm25([chunk("e#0", ""), chunk("a#0", "alpha")]);
+  const hits = bm25Search(idx, "alpha", 5);
+  assert.ok(!hits.some((h) => h.chunkId === "e#0"), "empty chunk matched");
+});

@@ -33,6 +33,11 @@ test("rollup aggregates per-doc with MAX and sorts desc", () => {
   assert.equal(docs[1].docId, "d2");
 });
 
+test("rollup drops hits for chunks absent from the corpus (ghost ids)", () => {
+  const corpus = { docs: [], chunks: [], manifest: {} as GsdCorpus["manifest"] } as GsdCorpus;
+  assert.deepEqual(rollup([{ chunkId: "ghost#0", score: 5 }], corpus), []);
+});
+
 test("end-to-end: lexical hits roll up to the doc that owns the top chunk", () => {
   // The "flaky build → debug doc" acceptance is semantic (see bm25.test.ts note); proving
   // it requires plan 09-02's semantic modality + retrieve.test.ts. This test proves the

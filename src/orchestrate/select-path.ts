@@ -92,15 +92,27 @@ export interface SelectPathInput {
  * to THIS intent, not a fixed list, and not by loose retrieval noise. Steps are returned in lifecycle order.
  */
 export function selectPath(input: SelectPathInput): PathStep[] {
+  // WR-01: an empty/whitespace or non-engaging (chat) intent is not GSD work — no path to drive.
+  // classifyIntent("") → chat, which is NOT quick, so it would otherwise fall through to the full
+  // backbone. Return an empty path so callers (and executePath) can distinguish "nothing to do".
+  if (input.intent.trim().length === 0) return [];
   const intent = input.intent.toLowerCase();
   const topIds = input.retrieved.slice(0, CONSENSUS_TOP).map((r) => r.docId.toLowerCase());
   // Complexity tier: a "quick" intent gets the minimal path; substantial work gets the full backbone.
   const category = classifyIntent(input.intent).category;
-  const stages: Stage[] = [...(QUICK_CATEGORIES.has(category) ? QUICK_BACKBONE : BACKBONE)];
+  if (category === "chat") return [];
+  const isQuick = QUICK_CATEGORIES.has(category);
+  const stages: Stage[] = [...(isQuick ? QUICK_BACKBONE : BACKBONE)];
   for (const c of CONDITIONAL) {
     const consensus = topIds.filter((id) => c.doc.test(id)).length >= CONSENSUS_MIN;
-    if (c.intent.test(intent) || consensus) stages.push(c.stage);
+    if (c.intent.test(intent) || consensus) {
+      // CR-02: a QUICK path must NEVER contain a decision gate — a gate HALTS the driven run and
+      // breaks gsd-quick fast-completion. Strip the gate flag from conditional stages on the quick path.
+      stages.push(isQuick ? { ...c.stage, gate: false } : c.stage);
+    }
   }
-  stages.sort((a, b) => a.pos - b.pos);
+  // WR-04: deterministic ordering. pos collisions (research/ui both pos 30) must not rely on V8
+  // sort stability — break ties by verb so output is reproducible.
+  stages.sort((a, b) => a.pos - b.pos || a.verb.localeCompare(b.verb));
   return stages.map((s) => ({ verb: s.verb, skill: s.skill, reason: s.reason ?? "core lifecycle", gate: s.gate ?? false }));
 }

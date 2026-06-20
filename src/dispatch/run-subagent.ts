@@ -84,9 +84,11 @@ export function extractAssistantText(messages: unknown[]): ExtractedAssistantTex
         const textParts = content.filter(
           (c) => c && typeof c === "object" && typeof (c as { text?: unknown }).text === "string",
         );
-        // A recognized array-of-parts assistant message: parsed even when every
-        // part is empty (a genuine empty reply), so the caller does not mistake it
-        // for parser drift.
+        // CR-02: an array with NO text parts (tool_use-only or empty array) is NOT a
+        // real assistant reply — keep scanning earlier messages so a tool-result-only
+        // final message reads as parser drift (parsed:false), per the L-03 contract.
+        // Tradeoff: a genuinely empty-array reply now also reads as drift — the safer error.
+        if (textParts.length === 0) continue;
         const joined = textParts.map((c) => (c as { text: string }).text).filter(Boolean).join("\n");
         return { text: joined, parsed: true };
       }
@@ -137,28 +139,34 @@ export async function runSubagent(
     runParams.lane = def.thinking; // effort/lane selector (A2); thinking tier 1:1
   }
   const { runId } = await api.runtime.subagent.run(runParams);
-  const wait = await api.runtime.subagent.waitForRun({
-    runId,
-    timeoutMs: opts.timeoutMs ?? 120_000,
-  });
 
-  let text = "";
-  let parsed: boolean | undefined;
-  if (wait.status === "ok") {
-    const { messages } = await api.runtime.subagent.getSessionMessages({ sessionKey, limit: 20 });
-    const extracted = extractAssistantText(messages);
-    text = extracted.text;
-    // L-03: only meaningful on a successful run — surface parser drift vs empty reply.
-    parsed = extracted.parsed;
-  }
+  // CR-01: the session must be deleted even if waitForRun/getSessionMessages throws
+  // after a successful run() — otherwise the session leaks. Cleanup lives in `finally`,
+  // not a trailing block.
+  try {
+    const wait = await api.runtime.subagent.waitForRun({
+      runId,
+      timeoutMs: opts.timeoutMs ?? 120_000,
+    });
 
-  if (opts.cleanup !== false) {
-    try {
-      await api.runtime.subagent.deleteSession({ sessionKey });
-    } catch {
-      /* cleanup is best-effort; never fail the dispatch on cleanup */
+    let text = "";
+    let parsed: boolean | undefined;
+    if (wait.status === "ok") {
+      const { messages } = await api.runtime.subagent.getSessionMessages({ sessionKey, limit: 20 });
+      const extracted = extractAssistantText(messages);
+      text = extracted.text;
+      // L-03: only meaningful on a successful run — surface parser drift vs empty reply.
+      parsed = extracted.parsed;
+    }
+
+    return { status: wait.status, text, error: wait.error, sessionKey, parsed };
+  } finally {
+    if (opts.cleanup !== false) {
+      try {
+        await api.runtime.subagent.deleteSession({ sessionKey });
+      } catch {
+        /* cleanup is best-effort; never fail the dispatch on cleanup */
+      }
     }
   }
-
-  return { status: wait.status, text, error: wait.error, sessionKey, parsed };
 }

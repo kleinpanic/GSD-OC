@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { autoEngageHandler, isCodingWorkspace, GSD_META_PROMPT } from "../src/hooks/auto-engage.js";
 import { classifyIntent } from "../src/engage/classify.js";
 
@@ -78,13 +79,48 @@ test("isCodingWorkspace path containment", () => {
   assert.equal(isCodingWorkspace(undefined, roots), false);
 });
 
+test("isCodingWorkspace walks UP to an ancestor marker for a coding SUBDIR (WR-01)", () => {
+  // package.json in the project ROOT; query a nested subdir (src/) outside any root.
+  const root = mkdtempSync(join(tmpdir(), "gsd-mkup-"));
+  try {
+    writeFileSync(join(root, "package.json"), "{}");
+    const nested = join(root, "packages", "foo", "src");
+    mkdirSync(nested, { recursive: true });
+    assert.equal(
+      isCodingWorkspace(nested, ["/nonexistent-root"]),
+      true,
+      "ancestor package.json → subdir is a coding workspace",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("isCodingWorkspace: a dir with NO ancestor markers → false (walk-up negative)", () => {
+  // A clean tmp dir + nested subdir, no markers anywhere up to root → not a coding workspace.
+  const dir = mkdtempSync(join(tmpdir(), "gsd-nomarker-"));
+  try {
+    const nested = join(dir, "a", "b");
+    mkdirSync(nested, { recursive: true });
+    assert.equal(isCodingWorkspace(nested, ["/nonexistent-root"]), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("isCodingWorkspace: filesystem root '/' → false (bounded walk terminates)", () => {
+  assert.equal(isCodingWorkspace("/", ["/nonexistent-root"]), false);
+});
+
 test("isCodingWorkspace fires by MARKER outside any root (the auto-engage gap fix)", () => {
   // A dir with a coding marker (.git/package.json/.planning) is a coding workspace regardless of path —
   // this is what makes GSD auto-engage in agent workspaces (~/.openclaw/workspace-*) not under ~/codeWS.
   const dir = mkdtempSync(join(homedir(), "codeWS", "gsd-mk-")); // use a temp dir we can mark
   try {
-    // create a sibling temp OUTSIDE codeWS to prove marker-based (not root-based) detection
-    const outside = mkdtempSync(join(homedir(), "gsd-outside-"));
+    // create a temp OUTSIDE codeWS to prove marker-based (not root-based) detection. Use
+    // tmpdir() (not homedir()) because activation now walks UP for markers and ~/.planning is a
+    // real GSD marker — a homedir() child would inherit it and the no-marker baseline would fail.
+    const outside = mkdtempSync(join(tmpdir(), "gsd-outside-"));
     try {
       assert.equal(isCodingWorkspace(outside, ["/nonexistent-root"]), false, "no marker, not under root → false");
       writeFileSync(join(outside, "package.json"), "{}");
