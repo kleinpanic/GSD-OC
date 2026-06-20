@@ -16,6 +16,7 @@
       "gsd_orchestrate",
       "gsd_retrieve",
       "gsd_settings",
+      "gsd_state",
       "gsd_workflow",
       "gsd_project",
       "gsd_quality",
