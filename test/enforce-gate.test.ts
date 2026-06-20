@@ -77,3 +77,34 @@ test("ENF: workflow.enforce_tool_gate:false disables the gate", () => {
     assert.equal(enforceToolGate(edit, {}, { cwd: dir }), undefined);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+import { enforceSpawnPersona } from "../src/hooks/enforce-gate.js";
+
+test("ENF-SPAWN: a subagent spawn in a GSD workspace gets the matching GSD persona injected", () => {
+  const dir = ws(null); // coding workspace (has .git), greenfield is fine — spawn enforcement is independent of route
+  try {
+    const r = enforceSpawnPersona({ toolName: "sessions_spawn", params: { agentId: "dev", message: "plan the auth phase" } }, {}, { cwd: dir });
+    assert.ok(r && r.params, "spawn params rewritten");
+    const msg = String((r!.params as { message: string }).message);
+    assert.match(msg, /GSD \*\*gsd-planner\*\* subagent/, "planner persona injected for a planning task");
+    assert.match(msg, /--- Task ---\nplan the auth phase/, "original task preserved after the persona");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("ENF-SPAWN: a debug task routes to the gsd-debugger persona; default is gsd-executor", () => {
+  const dir = ws(null);
+  try {
+    const dbg = enforceSpawnPersona({ toolName: "sessions_spawn", params: { message: "the build is flaky, debug it" } }, {}, { cwd: dir });
+    assert.match(String((dbg!.params as { message: string }).message), /gsd-debugger/);
+    const def = enforceSpawnPersona({ toolName: "sessions_spawn", params: { message: "do the thing" } }, {}, { cwd: dir });
+    assert.match(String((def!.params as { message: string }).message), /gsd-executor/, "no clear role → still a GSD persona, never bare");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("ENF-SPAWN: non-spawn tool + already-GSD spawn + non-coding ws are left alone", () => {
+  const dir = ws(null);
+  try {
+    assert.equal(enforceSpawnPersona({ toolName: "edit", params: {} }, {}, { cwd: dir }), undefined);
+    assert.equal(enforceSpawnPersona({ toolName: "sessions_spawn", params: { message: "<!-- gsd-oc:persona --> already" } }, {}, { cwd: dir }), undefined, "idempotent — no double-inject");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
