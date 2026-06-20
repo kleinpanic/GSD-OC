@@ -12,6 +12,7 @@ import { gsdBootstrapHandler, type AgentBootstrapEvent } from "./engage/bootstra
 import { retrieve } from "./retrieval/retrieve.js";
 import { embedAvailable } from "./retrieval/embed.js";
 import { selectPath } from "./orchestrate/select-path.js";
+import { executePath, makeSubagentDispatcher } from "./orchestrate/execute-path.js";
 
 const PLUGIN_ID = "gsd-oc";
 const PLUGIN_NAME = "GSD-OC";
@@ -25,6 +26,12 @@ const orchestrateParams = Type.Object(
   {
     intent: Type.Optional(
       Type.String({ description: "Freeform description of the coding/big-work intent to route through GSD." }),
+    ),
+    drive: Type.Optional(
+      Type.Boolean({ description: "Actually dispatch the path's GSD subagents (halts at decision gates), instead of only returning the plan." }),
+    ),
+    autoGates: Type.Optional(
+      Type.Boolean({ description: "When driving, auto-proceed through decision gates (autonomous run) instead of halting for approval." }),
     ),
   },
   { additionalProperties: false },
@@ -128,7 +135,13 @@ const entry = definePluginEntry({
       description:
         "Route a coding/big-work intent through the GSD lifecycle by dispatching the appropriate GSD subagent.",
       parameters: orchestrateParams,
-      async execute(_toolCallId: string, args: { intent?: string }, _signal?: unknown) {
+      async execute(
+        _toolCallId: string,
+        args: { intent?: string; drive?: boolean; autoGates?: boolean },
+        _signal?: unknown,
+        _onUpdate?: unknown,
+        context?: { api?: unknown },
+      ) {
         const intent = (args?.intent ?? "").trim();
         const state = await readState(".planning");
         const base = {
@@ -142,11 +155,26 @@ const entry = definePluginEntry({
         // skills/subagents for this intent, then order them into a lifecycle path (long-tail included).
         const retrieved = await retrieve(intent, { topK: 12 });
         const path = selectPath({ intent, retrieved: retrieved.map((r) => ({ docId: r.docId })) });
-        return {
+        const planned = {
           ...base,
           path: path.map((s) => ({ verb: s.verb, skill: s.skill, gate: s.gate, reason: s.reason })),
           relevant_skills: retrieved.slice(0, 8).map((r) => ({ id: r.docId, modality: r.modalities })),
         };
+        // PATH-execution: actually DRIVE the path (dispatch subagents, halt at gates) when asked AND the
+        // live subagent runtime is reachable from this tool-execution context; otherwise return the plan.
+        const runtimeApi = (context?.api ?? null) as { runtime?: { subagent?: unknown } } | null;
+        if (args?.drive && runtimeApi?.runtime?.subagent) {
+          const dispatch = makeSubagentDispatcher(runtimeApi as never, intent);
+          const run = await executePath(path, dispatch, { autoGates: args?.autoGates === true });
+          return {
+            ...planned,
+            executed: run.steps.map((s) => ({ verb: s.step.verb, status: s.status })),
+            completed: run.completed,
+            haltedAt: run.haltedAt,
+            reason: run.reason,
+          };
+        }
+        return planned;
       },
     } as never);
 
