@@ -12,8 +12,8 @@ test("PORT-01: rewrites ~/.claude reference/template/agent paths to bundled lang
 });
 
 test("PORT-01: neutralizes gsd-tools CLI + bin paths + a bare $HOME/.claude", () => {
-  assert.match(adaptGsdText("gsd-tools query commit --files x"), /gsd-oc native engine \(`commit`\)/);
-  assert.match(adaptGsdText("$HOME/.claude/gsd-core/bin/lib/ui-safety-gate.cjs"), /gsd-oc native engine/);
+  assert.match(adaptGsdText("gsd-tools query commit --files x"), /gsd-oc-engine \(commit\)/);
+  assert.match(adaptGsdText("$HOME/.claude/gsd-core/bin/lib/ui-safety-gate.cjs"), /gsd-oc-engine/);
   assert.equal(/\$HOME\/\.claude/.test(adaptGsdText("configDir = $HOME/.claude")), false);
   assert.match(adaptGsdText("Claude Code drives this"), /the OpenClaw agent drives this/);
 });

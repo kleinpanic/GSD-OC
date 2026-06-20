@@ -18,20 +18,22 @@ export function adaptGsdText(text: string): string {
   t = t.replace(/@?\$HOME\/\.claude\/gsd-core\/workflows\/([\w./-]+?)\.md/g, "the bundled GSD workflow `workflow:$1`");
   t = t.replace(/@?\$HOME\/\.claude\/agents\/(gsd-[\w-]+)\.md/g, "the bundled GSD subagent `$1`");
 
-  // 2. Claude-Code CLI binaries / gsd-core bin → the native engine (no shelling).
-  t = t.replace(/@?\$HOME\/\.claude\/(gsd-core\/)?bin\/[\w./-]+/g, "the gsd-oc native engine");
+  // 2. Claude-Code CLI binaries / gsd-core bin → a SHELL-SAFE identifier (no spaces — a prose phrase here
+  //    corrupted a bash shim, e.g. `command -v <phrase>`). `gsd-oc-engine` is valid in both code and prose.
+  t = t.replace(/@?\$HOME\/\.claude\/(gsd-core\/)?bin\/[\w./-]+/g, "gsd-oc-engine");
 
-  // 3. Any remaining ~/.claude or $HOME/.claude path → neutral bundled-data root (with OR without a
-  //    trailing slash, e.g. a bare `configDir = $HOME/.claude`).
+  // 3. Any remaining .claude path → neutral bundled-data root. Handle $HOME/, ~/, AND a BARE `.claude/`
+  //    (the prior transform missed `.claude/skills/`, `.claude/gsd-core` — 21 refs survived).
   t = t.replace(/@?\$HOME\/\.claude(\/)?/g, "<gsd-bundled>$1");
   t = t.replace(/@?~\/\.claude(\/)?/g, "<gsd-bundled>$1");
+  t = t.replace(/(?<!\w)\.claude(\/)/g, "<gsd-bundled>$1");
 
-  // 4. gsd-tools CLI invocations → the native engine (the gsd-oc plugin reimplements state/commit/etc.;
-  //    R0.3 forbids shelling gsd-tools). Keep the verb so the intent is preserved, drop the CLI framing.
-  t = t.replace(/`?gsd-tools\s+query\s+([\w.-]+)`?/g, "the gsd-oc native engine (`$1`)");
-  t = t.replace(/`?gsd-tools(\.cjs)?`?/g, "the gsd-oc native engine");
+  // 4. gsd-tools CLI → shell-safe `gsd-oc-engine` (NOT a spaced phrase: `_GSD_SHIM_NAME="gsd-tools.cjs"`
+  //    must not become a multi-word string). Keep the query verb as a trailing note where present.
+  t = t.replace(/`?gsd-tools(?:\.cjs)?\s+query\s+([\w.-]+)`?/g, "gsd-oc-engine ($1)");
+  t = t.replace(/`?gsd-tools(?:\.cjs)?`?/g, "gsd-oc-engine");
 
-  // 5. Runtime-name agnosticism — these docs are now driven by OpenClaw agents, not Claude Code.
+  // 5. Runtime-name agnosticism — these docs are driven by OpenClaw agents, not Claude Code.
   t = t.replace(/Claude Code/g, "the OpenClaw agent");
   t = t.replace(/claude-code/g, "openclaw");
   t = t.replace(/claude code/g, "the openclaw agent");
@@ -39,7 +41,8 @@ export function adaptGsdText(text: string): string {
   return t;
 }
 
-/** True iff the text still carries a Claude-runtime assumption the transform should have removed. */
+/** True iff the text still carries a Claude-runtime assumption the transform should have removed.
+ *  Includes a BARE `.claude/` (not just $HOME/~) so PORT-02 catches `.claude/skills/` etc. */
 export function hasClaudeRuntimeRef(text: string): boolean {
-  return /\$HOME\/\.claude\/|~\/\.claude\/|gsd-tools|Claude Code|claude-code/.test(text);
+  return /(?<!\w)\.claude\/|\$HOME\/\.claude|~\/\.claude|gsd-tools|Claude Code|claude-code/.test(text);
 }
