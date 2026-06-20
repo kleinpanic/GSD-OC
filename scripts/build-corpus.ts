@@ -14,6 +14,7 @@ import type { GsdDoc, GsdDocKind, GsdCorpus } from "../src/retrieval/types.ts";
 import { chunkDoc } from "../src/retrieval/chunk.ts";
 import { buildManifest, sha256 } from "../src/retrieval/manifest.ts";
 import { detectGsdInstall, safeList } from "../src/retrieval/detect.ts";
+import { adaptGsdText } from "./adapt-gsd.ts";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(SCRIPT_DIR, "..");
@@ -55,7 +56,9 @@ function buildDocs(srcs: Source[]): GsdDoc[] {
     const files = safeList(src.root, src.recursive).filter((f) => src.filter(basename(f)));
     if (files.length === 0) throw new Error(`no ${src.kind} sources found under ${src.root}`);
     for (const path of files) {
-      const text = readFileSync(path, "utf8");
+      const raw = readFileSync(path, "utf8");
+      // PORT-01: adapt Claude-runtime assumptions (~/.claude paths, gsd-tools CLI) to bundled/native form.
+      const text = adaptGsdText(raw);
       const rel = relative(src.root, path).replace(extname(path), "");
       const id = `${src.kind}:${rel}`;
       docs.push({ id, kind: src.kind, path, title: titleOf(text, basename(path)), text, sha256: sha256(text) });

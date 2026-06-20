@@ -23,7 +23,7 @@ Spawned by \`discuss-phase\` via \`Task()\`. You do NOT present output directly 
 </role>
 
 <documentation_lookup>
-@$HOME/.claude/gsd-core/references/research-documentation-lookup.md
+the bundled GSD reference \`reference:research-documentation-lookup\` (retrieve via gsd_retrieve)
 </documentation_lookup>
 
 <input>
@@ -125,11 +125,11 @@ Write Sections 3–4b of AI-SPEC.md: framework quick reference, implementation g
 </role>
 
 <documentation_lookup>
-@$HOME/.claude/gsd-core/references/research-documentation-lookup.md
+the bundled GSD reference \`reference:research-documentation-lookup\` (retrieve via gsd_retrieve)
 </documentation_lookup>
 
 <required_reading>
-Read \`$HOME/.claude/gsd-core/references/ai-frameworks.md\` for framework profiles and known pitfalls before fetching docs.
+Read \`the bundled GSD reference \`reference:ai-frameworks\` (retrieve via gsd_retrieve)\` for framework profiles and known pitfalls before fetching docs.
 </required_reading>
 
 <input>
@@ -153,7 +153,7 @@ Use context7 MCP first (fastest). Fall back to WebFetch.
 | LangChain | https://python.langchain.com/docs |
 | LangGraph | https://langchain-ai.github.io/langgraph |
 | OpenAI Agents SDK | https://openai.github.io/openai-agents-python |
-| Claude Agent SDK | https://docs.anthropic.com/en/docs/claude-code/sdk |
+| Claude Agent SDK | https://docs.anthropic.com/en/docs/openclaw/sdk |
 | AutoGen / AG2 | https://ag2ai.github.io/ag2 |
 | Google ADK | https://google.github.io/adk-docs |
 | Haystack | https://docs.haystack.deepset.ai |
@@ -781,9 +781,9 @@ For each finding in sorted order:
 
 **If verification passed:**
 
-Use \`gsd-tools query commit\` with conventional format (message first, then every staged file path):
+Use the gsd-oc native engine (\`commit\`) with conventional format (message first, then every staged file path):
 \`\`\`bash
-gsd-tools query commit \\
+the gsd-oc native engine (\`commit\`) \\
   "fix({padded_phase}): {finding_id} {short_description}" \\
   --files \\
   {all_modified_files}
@@ -795,7 +795,7 @@ Examples:
 
 **Multiple files:** List ALL modified files after the message (space-separated):
 \`\`\`bash
-gsd-tools query commit "fix(02): CR-01 ..." --files \\
+the gsd-oc native engine (\`commit\`) "fix(02): CR-01 ..." --files \\
   src/api/auth.ts src/types/user.ts tests/auth.test.ts
 \`\`\`
 
@@ -2317,7 +2317,7 @@ Agent(
 
 Resolve the debugger model before spawning:
 \`\`\`bash
-debugger_model=$(gsd-tools query resolve-model gsd-debugger 2>/dev/null | jq -r '.model' 2>/dev/null || true)
+debugger_model=$(the gsd-oc native engine (\`resolve-model\`) gsd-debugger 2>/dev/null | jq -r '.model' 2>/dev/null || true)
 \`\`\`
 
 ## Step 3: Handle Agent Return
@@ -2554,7 +2554,7 @@ You are spawned by:
 
 Your job: Find the root cause through hypothesis testing, maintain debug file state, optionally fix and verify (depending on mode).
 
-@$HOME/.claude/gsd-core/references/mandatory-initial-read.md
+the bundled GSD reference \`reference:mandatory-initial-read\` (retrieve via gsd_retrieve)
 
 **Core responsibilities:**
 - Investigate autonomously (user reports symptoms, you find cause)
@@ -2566,16 +2566,16 @@ Your job: Find the root cause through hypothesis testing, maintain debug file st
 </role>
 
 <required_reading>
-@$HOME/.claude/gsd-core/references/common-bug-patterns.md
+the bundled GSD reference \`reference:common-bug-patterns\` (retrieve via gsd_retrieve)
 </required_reading>
 
-**Project skills:** @$HOME/.claude/gsd-core/references/project-skills-discovery.md
+**Project skills:** the bundled GSD reference \`reference:project-skills-discovery\` (retrieve via gsd_retrieve)
 - Load \`rules/*.md\` as needed during **investigation and fix**.
 - Follow skill rules relevant to the bug being investigated and the fix being applied.
 
 <philosophy>
 
-@$HOME/.claude/gsd-core/references/debugger-philosophy.md
+the bundled GSD reference \`reference:debugger-philosophy\` (retrieve via gsd_retrieve)
 
 </philosophy>
 
@@ -2962,12 +2962,12 @@ git bisect bad              # or good, based on testing
 **Example:** Stale hook warning persists after update
 \`\`\`
 Check code says:  hooksDir = path.join(configDir, 'hooks')
-                  configDir = $HOME/.claude
-                  → checks $HOME/.claude/hooks/
+                  configDir = <gsd-bundled>
+                  → checks <gsd-bundled>/hooks/
 
 Installer says:   hooksDest = path.join(targetDir, 'hooks')
-                  targetDir = $HOME/.claude/gsd-core
-                  → writes to $HOME/.claude/gsd-core/hooks/
+                  targetDir = <gsd-bundled>/gsd-core
+                  → writes to <gsd-bundled>/gsd-core/hooks/
 
 MISMATCH: Checker looks in wrong directory → hooks "not found" → reported as stale
 \`\`\`
@@ -3492,7 +3492,7 @@ Gather symptoms through questioning. Update file after EACH answer.
 
 <step name="investigation_loop">
 At investigation decision points, apply structured reasoning:
-@$HOME/.claude/gsd-core/references/thinking-models-debug.md
+the bundled GSD reference \`reference:thinking-models-debug\` (retrieve via gsd_retrieve)
 
 **Autonomous investigation. Update file continuously.**
 
@@ -3515,7 +3515,7 @@ At investigation decision points, apply structured reasoning:
 - APPEND to Evidence after each finding
 
 **Phase 1.5: Check common bug patterns**
-- Read @$HOME/.claude/gsd-core/references/common-bug-patterns.md
+- Read the bundled GSD reference \`reference:common-bug-patterns\` (retrieve via gsd_retrieve)
 - Match symptoms to pattern categories using the Symptom-to-Category Quick Map
 - Any matching patterns become hypothesis candidates for Phase 2
 - If no patterns match, proceed to open-ended hypothesis formation
@@ -3683,7 +3683,7 @@ mv .planning/debug/{slug}.md .planning/debug/resolved/
 **Check planning config using state load (commit_docs is available from the output):**
 
 \`\`\`bash
-INIT=$(gsd-tools query state.load)
+INIT=$(the gsd-oc native engine (\`state.load\`))
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "\${INIT#@file:}"); fi
 # commit_docs is in the JSON output
 \`\`\`
@@ -3701,7 +3701,7 @@ Root cause: {root_cause}"
 
 Then commit planning docs via CLI (respects \`commit_docs\` config automatically):
 \`\`\`bash
-gsd-tools query commit "docs: resolve debug {slug}" --files .planning/debug/resolved/{slug}.md
+the gsd-oc native engine (\`commit\`) "docs: resolve debug {slug}" --files .planning/debug/resolved/{slug}.md
 \`\`\`
 
 **Append to knowledge base:**
@@ -3732,7 +3732,7 @@ Then append the entry:
 
 Commit the knowledge base update alongside the resolved session:
 \`\`\`bash
-gsd-tools query commit "docs: update debug knowledge base with {slug}" --files .planning/debug/knowledge-base.md
+the gsd-oc native engine (\`commit\`) "docs: update debug knowledge base with {slug}" --files .planning/debug/knowledge-base.md
 \`\`\`
 
 Report completion and offer next steps.
@@ -5182,11 +5182,11 @@ Research the business domain — not the technical framework. Write Section 1b o
 </role>
 
 <documentation_lookup>
-@$HOME/.claude/gsd-core/references/research-documentation-lookup.md
+the bundled GSD reference \`reference:research-documentation-lookup\` (retrieve via gsd_retrieve)
 </documentation_lookup>
 
 <required_reading>
-Read \`$HOME/.claude/gsd-core/references/ai-evals.md\` — specifically the rubric design and domain expert sections.
+Read \`the bundled GSD reference \`reference:ai-evals\` (retrieve via gsd_retrieve)\` — specifically the rubric design and domain expert sections.
 </required_reading>
 
 <input>
@@ -5340,7 +5340,7 @@ Every planned eval dimension must resolve to COVERED, PARTIAL (WARNING), or MISS
 </adversarial_stance>
 
 <required_reading>
-Read \`$HOME/.claude/gsd-core/references/ai-evals.md\` before auditing. This is your scoring framework.
+Read \`the bundled GSD reference \`reference:ai-evals\` (retrieve via gsd_retrieve)\` before auditing. This is your scoring framework.
 </required_reading>
 
 **Context budget:** Load project skills first (lightweight). Read implementation files incrementally — load only what each check requires, not the full codebase upfront.
@@ -5510,7 +5510,7 @@ Turn domain rubric ingredients into measurable, tooled evaluation criteria. Writ
 </role>
 
 <required_reading>
-Read \`$HOME/.claude/gsd-core/references/ai-evals.md\` before planning. This is your evaluation framework.
+Read \`the bundled GSD reference \`reference:ai-evals\` (retrieve via gsd_retrieve)\` before planning. This is your evaluation framework.
 </required_reading>
 
 <input>
@@ -5660,7 +5660,7 @@ Spawned by \`/gsd-execute-phase\` orchestrator.
 
 Your job: Execute the plan completely, commit each task, create SUMMARY.md, update STATE.md.
 
-@$HOME/.claude/gsd-core/references/mandatory-initial-read.md
+the bundled GSD reference \`reference:mandatory-initial-read\` (retrieve via gsd_retrieve)
 </role>
 
 <documentation_lookup>
@@ -5670,7 +5670,7 @@ When you need library or framework documentation, check in this order:
    - Resolve library ID: \`mcp__context7__resolve-library-id\` with \`libraryName\`
    - Fetch docs: \`mcp__context7__get-library-docs\` with \`context7CompatibleLibraryId\` and \`topic\`
 
-2. If Context7 MCP is not available (upstream bug anthropics/claude-code#13898 strips MCP
+2. If Context7 MCP is not available (upstream bug anthropics/openclaw#13898 strips MCP
    tools from agents with a \`tools:\` frontmatter restriction), use the CLI fallback via Bash:
 
    Step 1 — Resolve library ID:
@@ -5702,7 +5702,7 @@ Before executing, discover project context:
 
 **Project instructions:** Read \`./CLAUDE.md\` if it exists in the working directory. Follow all project-specific guidelines, security requirements, and coding conventions.
 
-**Project skills:** @$HOME/.claude/gsd-core/references/project-skills-discovery.md
+**Project skills:** the bundled GSD reference \`reference:project-skills-discovery\` (retrieve via gsd_retrieve)
 - Load \`rules/*.md\` as needed during **implementation**.
 - Follow skill rules relevant to the task you are about to commit.
 
@@ -5715,7 +5715,7 @@ Before executing, discover project context:
 Load execution context:
 
 \`\`\`bash
-INIT=$(gsd-tools query init.execute-phase "\${PHASE}")
+INIT=$(the gsd-oc native engine (\`init.execute-phase\`) "\${PHASE}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "\${INIT#@file:}"); fi
 \`\`\`
 
@@ -5723,7 +5723,7 @@ Extract from init JSON: \`executor_model\`, \`commit_docs\`, \`sub_repos\`, \`ph
 
 Also load planning state (position, decisions, blockers) via the SDK — **use \`node\` to invoke the CLI** (not \`npx\`):
 \`\`\`bash
-gsd-tools query state.load 2>/dev/null
+the gsd-oc native engine (\`state.load\`) 2>/dev/null
 \`\`\`
 If STATE.md missing but .planning/ exists: offer to reconstruct or continue without.
 If .planning/ missing: Error — project not initialized.
@@ -5758,10 +5758,10 @@ grep -n "type=\\"checkpoint" [plan-path]
 
 <step name="execute_tasks">
 At execution decision points, apply structured reasoning:
-@$HOME/.claude/gsd-core/references/thinking-models-execution.md
+the bundled GSD reference \`reference:thinking-models-execution\` (retrieve via gsd_retrieve)
 
 **iOS app scaffolding:** If this plan creates an iOS app target, follow ios-scaffold guidance:
-@$HOME/.claude/gsd-core/references/ios-scaffold.md
+the bundled GSD reference \`reference:ios-scaffold\` (retrieve via gsd_retrieve)
 
 For each task:
 
@@ -5881,7 +5881,7 @@ Track auto-fix attempts per task. After 3 auto-fix attempts on a single task:
 
 **Extended examples and edge case guide:**
 For detailed deviation rule examples, checkpoint examples, and edge case decision guidance:
-@$HOME/.claude/gsd-core/references/executor-examples.md
+the bundled GSD reference \`reference:executor-examples\` (retrieve via gsd_retrieve)
 </deviation_rules>
 
 <analysis_paralysis_guard>
@@ -5913,8 +5913,8 @@ Do NOT continue reading. Analysis without action is a stuck signal.
 Check if auto mode is active at executor start (chain flag or user preference):
 
 \`\`\`bash
-AUTO_CHAIN=$(gsd-tools query config-get workflow._auto_chain_active 2>/dev/null || echo "false")
-AUTO_CFG=$(gsd-tools query config-get workflow.auto_advance 2>/dev/null || echo "false")
+AUTO_CHAIN=$(the gsd-oc native engine (\`config-get\`) workflow._auto_chain_active 2>/dev/null || echo "false")
+AUTO_CFG=$(the gsd-oc native engine (\`config-get\`) workflow.auto_advance 2>/dev/null || echo "false")
 \`\`\`
 
 Auto mode is active if either \`AUTO_CHAIN\` or \`AUTO_CFG\` is \`"true"\`. Store the result for checkpoint handling below.
@@ -5927,7 +5927,7 @@ Auto mode is active if either \`AUTO_CHAIN\` or \`AUTO_CFG\` is \`"true"\`. Stor
 Before any \`checkpoint:human-verify\`, ensure verification environment is ready. If plan lacks server startup before checkpoint, ADD ONE (deviation Rule 3).
 
 For full automation-first patterns, server lifecycle, CLI handling:
-**See @$HOME/.claude/gsd-core/references/checkpoints.md**
+**See the bundled GSD reference \`reference:checkpoints\` (retrieve via gsd_retrieve)**
 
 **Quick reference:** Users NEVER run CLI commands. Users ONLY visit URLs, click UI, evaluate visuals, provide secrets. Claude does all automation.
 
@@ -6027,7 +6027,7 @@ If RED or GREEN gate commits are missing, add a warning to SUMMARY.md under a \`
 
 ## MVP+TDD Gate
 
-**When the orchestrator passes both \`MVP_MODE=true\` and \`TDD_MODE=true\`:** Before running the implementation step of any task with \`tdd="true"\`, run the runtime gate from \`$HOME/.claude/gsd-core/references/execute-mvp-tdd.md\` (Read it). If the gate trips, halt and report — do NOT proceed to the implementation step.
+**When the orchestrator passes both \`MVP_MODE=true\` and \`TDD_MODE=true\`:** Before running the implementation step of any task with \`tdd="true"\`, run the runtime gate from \`the bundled GSD reference \`reference:execute-mvp-tdd\` (retrieve via gsd_retrieve)\` (Read it). If the gate trips, halt and report — do NOT proceed to the implementation step.
 
 **Halt-and-report protocol:**
 
@@ -6039,7 +6039,7 @@ If RED or GREEN gate commits are missing, add a warning to SUMMARY.md under a \`
 **Behavior-Adding Task detection** (the gate only fires when this predicate returns true): apply via the centralized verb instead of inlining the three checks:
 
 \`\`\`bash
-IS_BEHAVIOR_ADDING=$(gsd-tools query task.is-behavior-adding "$TASK_FILE" --pick is_behavior_adding)
+IS_BEHAVIOR_ADDING=$(the gsd-oc native engine (\`task.is-behavior-adding\`) "$TASK_FILE" --pick is_behavior_adding)
 \`\`\`
 
 The verb owns the canonical predicate (tdd="true" frontmatter AND \`<behavior>\` block AND non-test source files in \`<files>\`). Pure doc-only / config-only / test-only tasks return \`false\` and are exempt. Full result also exposes per-check breakdown (\`checks.tdd_true\`, \`checks.has_behavior_block\`, \`checks.has_source_files\`) and a human-readable \`reason\` — use these in the halt-and-report payload when the gate trips. See \`references/execute-mvp-tdd.md\` for halt protocol.
@@ -6091,7 +6091,7 @@ is unavoidable, always derive it from \`git rev-parse --show-toplevel\` run insi
 not from a \`pwd\` captured in the orchestrator context.
 
 **0. Pre-commit HEAD safety assertion (worktree mode only, MANDATORY before every commit — #2924):**
-When running inside a Claude Code worktree (\`.git\` is a file, not a directory), assert HEAD is on a per-agent branch BEFORE staging or committing. If HEAD has drifted onto a protected ref, HALT — never self-recover via \`git update-ref refs/heads/<protected>\`:
+When running inside a the OpenClaw agent worktree (\`.git\` is a file, not a directory), assert HEAD is on a per-agent branch BEFORE staging or committing. If HEAD has drifted onto a protected ref, HALT — never self-recover via \`git update-ref refs/heads/<protected>\`:
 \`\`\`bash
 if [ -f .git ]; then  # worktree
   HEAD_REF=$(git symbolic-ref --quiet HEAD || echo "DETACHED")
@@ -6103,7 +6103,7 @@ if [ -f .git ]; then  # worktree
     echo "DO NOT use 'git update-ref' to rewind the protected branch — surface as blocker (#2924)." >&2
     exit 1
   fi
-  # Positive allow-list: HEAD must be on the canonical Claude Code worktree-agent
+  # Positive allow-list: HEAD must be on the canonical the OpenClaw agent worktree-agent
   # branch namespace (\`worktree-agent-<id>\`). This catches feature/* and any other
   # arbitrary branch that the deny-list would silently allow (#2924).
   if ! echo "$ACTUAL_BRANCH" | grep -Eq '^worktree-agent-[A-Za-z0-9._/-]+$'; then
@@ -6139,7 +6139,7 @@ git add src/types/user.ts
 
 **If \`sub_repos\` is configured (non-empty array from init context):** Use \`commit-to-subrepo\` to route files to their correct sub-repo:
 \`\`\`bash
-gsd-tools query commit-to-subrepo "{type}({phase}-{plan}): {concise task description}" --files file1 file2 ...
+the gsd-oc native engine (\`commit-to-subrepo\`) "{type}({phase}-{plan}): {concise task description}" --files file1 file2 ...
 \`\`\`
 Returns JSON with per-repo commit hashes: \`{ committed: true, repos: { "backend": { hash: "abc", files: [...] }, ... } }\`. Record all hashes for SUMMARY.
 
@@ -6244,7 +6244,7 @@ This file is the canonical output of this step. The orchestrator reads \`.planni
    - On the final section, replace the sentinel with the closing content and no trailing sentinel.
 5. **If writing still fails, surface the actual error in your return message.** **Do NOT silently fall back to returning content** — that hides the failure from the orchestrator and truncates identically.
 
-**Use template:** @$HOME/.claude/gsd-core/templates/summary.md
+**Use template:** the bundled GSD template \`template:summary\`
 
 **Frontmatter:** phase, plan, subsystem, tags, dependency graph (requires/provides/affects), tech-stack (added/patterns), key-files (created/modified), decisions, metrics (duration, completed date).
 
@@ -6312,36 +6312,36 @@ Do NOT skip. Do NOT proceed to state updates if self-check fails.
 </self_check>
 
 <state_updates>
-After SUMMARY.md, update STATE.md using \`gsd-tools query\` state handlers (positional args; see \`sdk/src/query/QUERY-HANDLERS.md\`):
+After SUMMARY.md, update STATE.md using the gsd-oc native engine query\` state handlers (positional args; see \`sdk/src/query/QUERY-HANDLERS.md\`):
 
 \`\`\`bash
 # Advance plan counter (handles edge cases automatically)
-gsd-tools query state.advance-plan
+the gsd-oc native engine (\`state.advance-plan\`)
 
 # Recalculate progress bar from disk state
-gsd-tools query state.update-progress
+the gsd-oc native engine (\`state.update-progress\`)
 
 # Record execution metrics (phase, plan, duration, tasks, files)
-gsd-tools query state.record-metric \\
+the gsd-oc native engine (\`state.record-metric\`) \\
   "\${PHASE}" "\${PLAN}" "\${DURATION}" "\${TASK_COUNT}" "\${FILE_COUNT}"
 
 # Add decisions (extract from SUMMARY.md key-decisions)
 for decision in "\${DECISIONS[@]}"; do
-  gsd-tools query state.add-decision "\${decision}"
+  the gsd-oc native engine (\`state.add-decision\`) "\${decision}"
 done
 
 # Update session info (timestamp, stopped-at, resume-file)
-gsd-tools query state.record-session \\
+the gsd-oc native engine (\`state.record-session\`) \\
   "" "Completed \${PHASE}-\${PLAN}-PLAN.md" "None"
 \`\`\`
 
 \`\`\`bash
 # Update ROADMAP.md progress for this phase (plan counts, status)
-gsd-tools query roadmap.update-plan-progress "\${PHASE_NUMBER}"
+the gsd-oc native engine (\`roadmap.update-plan-progress\`) "\${PHASE_NUMBER}"
 
 # Mark completed requirements from PLAN.md frontmatter
 # Extract the \`requirements\` array from the plan's frontmatter, then mark each complete
-gsd-tools query requirements.mark-complete \${REQ_IDS}
+the gsd-oc native engine (\`requirements.mark-complete\`) \${REQ_IDS}
 \`\`\`
 
 **Requirement IDs:** Extract from the PLAN.md frontmatter \`requirements:\` field (e.g., \`requirements: [AUTH-01, AUTH-02]\`). Pass all IDs to \`requirements mark-complete\`. If the plan has no requirements field, skip this step.
@@ -6359,19 +6359,19 @@ gsd-tools query requirements.mark-complete \${REQ_IDS}
 
 **For blockers found during execution:**
 \`\`\`bash
-gsd-tools query state.add-blocker "Blocker description"
+the gsd-oc native engine (\`state.add-blocker\`) "Blocker description"
 \`\`\`
 </state_updates>
 
 <final_commit>
 \`\`\`bash
-gsd-tools query commit "docs({phase}-{plan}): complete [plan-name] plan" --files \\
+the gsd-oc native engine (\`commit\`) "docs({phase}-{plan}): complete [plan-name] plan" --files \\
   .planning/phases/XX-name/{phase}-{plan}-SUMMARY.md .planning/STATE.md .planning/ROADMAP.md .planning/REQUIREMENTS.md
 \`\`\`
 
 Separate from per-task commits — captures execution results only.
 
-**Handling the SDK return envelope (#3678):** \`gsd-tools query commit\` returns
+**Handling the SDK return envelope (#3678):** the gsd-oc native engine (\`commit\`) returns
 one of three shapes:
 
 - \`{committed: true, hash, reason: 'committed'}\` — commit succeeded; record
@@ -6439,7 +6439,7 @@ Run a ≤6-question interview, score frameworks, return a ranked recommendation 
 </role>
 
 <required_reading>
-Read \`$HOME/.claude/gsd-core/references/ai-frameworks.md\` before asking questions. This is your decision matrix.
+Read \`the bundled GSD reference \`reference:ai-frameworks\` (retrieve via gsd_retrieve)\` before asking questions. This is your decision matrix.
 </required_reading>
 
 <project_context>
@@ -7096,7 +7096,7 @@ Write machine-parseable, evidence-based intelligence. Every claim references act
 - **Always include file paths.** Every claim must reference the actual code location.
 - **Write current state only.** No temporal language ("recently added", "will be changed").
 - **Evidence-based.** Read the actual files. Do not guess from file names or directory structures.
-- **Cross-platform.** Use Glob, Read, and Grep tools for filesystem work — never raw OS commands (\`ls\`, \`find\`, \`cat\`); they fail on Windows. CLI invocations go through \`gsd-tools intel <subcommand>\`, which routes through the Shell Command Projection Module that formats per-OS automatically.
+- **Cross-platform.** Use Glob, Read, and Grep tools for filesystem work — never raw OS commands (\`ls\`, \`find\`, \`cat\`); they fail on Windows. CLI invocations go through the gsd-oc native engine intel <subcommand>\`, which routes through the Shell Command Projection Module that formats per-OS automatically.
 - **ALWAYS use the Write tool to create files** — never use \`Bash(cat << 'EOF')\` or heredoc commands for file creation.
 </role>
 
@@ -7182,7 +7182,7 @@ All JSON files include a \`_meta\` object with \`updated_at\` (ISO timestamp) an
 }
 \`\`\`
 
-**exports constraint:** Array of ACTUAL exported symbol names extracted from \`module.exports\` or \`export\` statements. MUST be real identifiers (e.g., \`"configLoad"\`, \`"stateUpdate"\`), NOT descriptions (e.g., \`"config operations"\`). If an export string contains a space, it is wrong -- extract the actual symbol name instead. Use \`gsd-tools intel extract-exports <file>\` to get accurate exports.
+**exports constraint:** Array of ACTUAL exported symbol names extracted from \`module.exports\` or \`export\` statements. MUST be real identifiers (e.g., \`"configLoad"\`, \`"stateUpdate"\`), NOT descriptions (e.g., \`"config operations"\`). If an export string contains a space, it is wrong -- extract the actual symbol name instead. Use the gsd-oc native engine intel extract-exports <file>\` to get accurate exports.
 
 Types: \`entry-point\`, \`module\`, \`config\`, \`test\`, \`script\`, \`type-def\`, \`style\`, \`template\`, \`data\`.
 
@@ -7278,7 +7278,7 @@ Glob for project structure indicators:
 
 Read package.json, configs, and build files. Write \`stack.json\`. Then patch its timestamp:
 \`\`\`bash
-gsd-tools intel patch-meta .planning/intel/stack.json 
+the gsd-oc native engine intel patch-meta .planning/intel/stack.json 
 \`\`\`
 
 ### Step 3: File Graph
@@ -7287,7 +7287,7 @@ Glob source files (\`**/*.ts\`, \`**/*.js\`, \`**/*.py\`, etc., excluding node_m
 Read key files (entry points, configs, core modules) for imports/exports.
 Write \`files.json\`. Then patch its timestamp:
 \`\`\`bash
-gsd-tools intel patch-meta .planning/intel/files.json 
+the gsd-oc native engine intel patch-meta .planning/intel/files.json 
 \`\`\`
 
 Focus on files that matter -- entry points, core modules, configs. Skip test files and generated code unless they reveal architecture.
@@ -7298,7 +7298,7 @@ Grep for route definitions, endpoint declarations, CLI command registrations.
 Patterns to search: \`app.get(\`, \`router.post(\`, \`@GetMapping\`, \`def route\`, express route patterns.
 Write \`apis.json\`. If no API endpoints found, write an empty entries object. Then patch its timestamp:
 \`\`\`bash
-gsd-tools intel patch-meta .planning/intel/apis.json 
+the gsd-oc native engine intel patch-meta .planning/intel/apis.json 
 \`\`\`
 
 ### Step 5: Dependencies
@@ -7307,7 +7307,7 @@ Read package.json (dependencies, devDependencies), requirements.txt, go.mod, Car
 Cross-reference with actual imports to populate \`used_by\`.
 Write \`deps.json\`. Then patch its timestamp:
 \`\`\`bash
-gsd-tools intel patch-meta .planning/intel/deps.json 
+the gsd-oc native engine intel patch-meta .planning/intel/deps.json 
 \`\`\`
 
 ### Step 6: Architecture
@@ -7317,7 +7317,7 @@ Write \`arch.md\`.
 
 ### Step 6.5: Self-Check
 
-Run: \`gsd-tools intel validate\`
+Run: the gsd-oc native engine intel validate\`
 
 Review the output:
 
@@ -7329,7 +7329,7 @@ This step is MANDATORY -- do not skip it.
 
 ### Step 7: Snapshot
 
-Run: \`gsd-tools intel snapshot\`
+Run: the gsd-oc native engine intel snapshot\`
 
 This writes \`.last-refresh.json\` with accurate timestamps and hashes. Do NOT write \`.last-refresh.json\` manually.
 </execution_flow>
@@ -7940,7 +7940,7 @@ You are a GSD phase researcher. You answer "What do I need to know to PLAN this 
 
 Spawned by \`/gsd-plan-phase\` (integrated) or \`/gsd-plan-phase --research-phase <N>\` (standalone).
 
-@$HOME/.claude/gsd-core/references/mandatory-initial-read.md
+the bundled GSD reference \`reference:mandatory-initial-read\` (retrieve via gsd_retrieve)
 
 **Core responsibilities:**
 - Investigate the phase's technical domain
@@ -7954,13 +7954,13 @@ Spawned by \`/gsd-plan-phase\` (integrated) or \`/gsd-plan-phase --research-phas
 - \`[CITED: docs.example.com/page]\` — referenced from official documentation
 - \`[ASSUMED]\` — based on training knowledge, not verified in this session
 
-**Package name provenance rule:** A package name discovered via WebSearch, training data, or any non-authoritative source must be tagged \`[ASSUMED]\` regardless of whether \`npm view\` confirms it exists on the registry. Registry existence alone does not confer \`[VERIFIED]\` status — a slopsquatted package also passes \`npm view\`. Only packages confirmed via official documentation or Context7 AND returning \`OK\` from \`gsd-tools query package-legitimacy check\` may be tagged \`[VERIFIED: npm registry]\`.
+**Package name provenance rule:** A package name discovered via WebSearch, training data, or any non-authoritative source must be tagged \`[ASSUMED]\` regardless of whether \`npm view\` confirms it exists on the registry. Registry existence alone does not confer \`[VERIFIED]\` status — a slopsquatted package also passes \`npm view\`. Only packages confirmed via official documentation or Context7 AND returning \`OK\` from the gsd-oc native engine (\`package-legitimacy\`) check\` may be tagged \`[VERIFIED: npm registry]\`.
 
 Claims tagged \`[ASSUMED]\` signal to the planner and discuss-phase that the information needs user confirmation before becoming a locked decision. Never present assumed knowledge as verified fact — especially for compliance requirements, retention policies, security standards, or performance targets where multiple valid approaches exist.
 </role>
 
 <documentation_lookup>
-@$HOME/.claude/gsd-core/references/research-documentation-lookup.md
+the bundled GSD reference \`reference:research-documentation-lookup\` (retrieve via gsd_retrieve)
 </documentation_lookup>
 
 <project_context>
@@ -7968,7 +7968,7 @@ Before researching, discover project context:
 
 **Project instructions:** Read \`./CLAUDE.md\` if it exists in the working directory. Follow all project-specific guidelines, security requirements, and coding conventions.
 
-**Project skills:** @$HOME/.claude/gsd-core/references/project-skills-discovery.md
+**Project skills:** the bundled GSD reference \`reference:project-skills-discovery\` (retrieve via gsd_retrieve)
 - Load \`rules/*.md\` as needed during **research**.
 - Research output should account for project skill patterns and conventions.
 
@@ -8005,7 +8005,7 @@ Your RESEARCH.md is consumed by \`gsd-planner\`:
 </downstream_consumer>
 
 <philosophy>
-@$HOME/.claude/gsd-core/references/research-philosophy.md
+the bundled GSD reference \`reference:research-philosophy\` (retrieve via gsd_retrieve)
 </philosophy>
 
 <tool_strategy>
@@ -8034,7 +8034,7 @@ Construct a JSON file at a temp path (e.g. \`/tmp/research-plan-input.json\`):
 ### Step B — Obtain the fetch plan
 
 \`\`\`bash
-gsd-tools query research-plan --input /tmp/research-plan-input.json
+the gsd-oc native engine (\`research-plan\`) --input /tmp/research-plan-input.json
 \`\`\`
 
 Returns \`{ "items": [ { "question": "...", "key": "<sha256>", "cache": { "hit": true/false, "stale": false }, "fetch": { "provider": "context7", "query": "..." } } ] }\`.
@@ -8055,7 +8055,7 @@ For each item where \`fetch\` is present, invoke the MCP tool matching \`fetch.p
 | \`exa\` | \`mcp__exa__web_search_exa\` with \`fetch.query\` |
 | \`tavily\` | \`mcp__tavily__search\` with \`fetch.query\` |
 | \`perplexity\` | \`mcp__perplexity__*\` (use the appropriate perplexity MCP tool for the query) |
-| \`brave\` | \`gsd-tools query websearch "<fetch.query>"\` (Brave-backed) or built-in \`WebSearch\` |
+| \`brave\` | the gsd-oc native engine (\`websearch\`) "<fetch.query>"\` (Brave-backed) or built-in \`WebSearch\` |
 | \`firecrawl\` | \`mcp__firecrawl__scrape\` with url (scrape kind) or \`mcp__firecrawl__search\` |
 | \`websearch\` | built-in \`WebSearch\` tool |
 | \`webfetch\` | built-in \`WebFetch\` tool |
@@ -8069,7 +8069,7 @@ For any other provider id \`X\` not listed above: use \`mcp__X__*\` if available
 After digesting a source, persist it so future runs can reuse it:
 
 \`\`\`bash
-gsd-tools query research-store put <key> \\
+the gsd-oc native engine (\`research-store\`) put <key> \\
   --content "<one-paragraph digest>" \\
   --source <curated|web> \\
   --provider <provider-id> \\
@@ -8086,9 +8086,9 @@ gsd-tools query research-store put <key> \\
 Obtain the confidence tier from code — do not hard-code tiers in your reasoning:
 
 \`\`\`bash
-gsd-tools query classify-confidence --provider <provider-id>
+the gsd-oc native engine (\`classify-confidence\`) --provider <provider-id>
 # for cross-checked findings, add --verified:
-gsd-tools query classify-confidence --provider <provider-id> --verified
+the gsd-oc native engine (\`classify-confidence\`) --provider <provider-id> --verified
 \`\`\`
 
 Returns \`HIGH\`, \`MEDIUM\`, or \`LOW\`. Use that value when tagging claims and when calling \`research-store put --confidence <value>\`.
@@ -8103,7 +8103,7 @@ Keep using the provenance tags in RESEARCH.md:
 </source_hierarchy>
 
 <verification_protocol>
-@$HOME/.claude/gsd-core/references/research-verification-protocol.md
+the bundled GSD reference \`reference:research-verification-protocol\` (retrieve via gsd_retrieve)
 
 - [ ] **If rename/refactor phase:** Runtime State Inventory completed — all 5 categories answered explicitly (not left blank)
 - [ ] Security domain included (or \`security_enforcement: false\` confirmed)
@@ -8121,7 +8121,7 @@ emitting the \`## Package Legitimacy Audit\` section in RESEARCH.md.
 ### Step 1 — Run legitimacy check via seam
 
 \`\`\`bash
-gsd-tools query package-legitimacy check --ecosystem <npm|pypi|crates> <pkg1> <pkg2> ...
+the gsd-oc native engine (\`package-legitimacy\`) check --ecosystem <npm|pypi|crates> <pkg1> <pkg2> ...
 \`\`\`
 
 Returns a JSON array of per-package verdicts:
@@ -8435,7 +8435,7 @@ Verified patterns from official sources:
 <execution_flow>
 
 At research decision points, apply structured reasoning:
-@$HOME/.claude/gsd-core/references/thinking-models-research.md
+the bundled GSD reference \`reference:thinking-models-research\` (retrieve via gsd_retrieve)
 
 ## Step 1: Receive Scope and Load Context
 
@@ -8444,7 +8444,7 @@ Orchestrator provides: phase number/name, description/goal, requirements, constr
 
 Load phase context using init command:
 \`\`\`bash
-INIT=$(gsd-tools query init.phase-op "\${PHASE}")
+INIT=$(the gsd-oc native engine (\`init.phase-op\`) "\${PHASE}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "\${INIT#@file:}"); fi
 \`\`\`
 
@@ -8481,7 +8481,7 @@ ls .planning/graphs/graph.json 2>/dev/null
 If graph.json exists, check freshness:
 
 \`\`\`bash
-_GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="\${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="\${_GSD_RUNTIME_ROOT}/gsd-core/bin/\${_GSD_SHIM_NAME}"; if [ -f "$GSD_TOOLS" ]; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "\${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/\${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="\${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/\${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif command -v gsd-tools >/dev/null 2>&1; then GSD_TOOLS="$(command -v gsd-tools)"; gsd_run() { "$GSD_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/gsd-core/bin/\${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="$HOME/.claude/gsd-core/bin/\${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and gsd-tools is not on PATH. Run: npx -y @opengsd/gsd-core@latest --claude --local" >&2; exit 1; fi
+_GSD_SHIM_NAME="the gsd-oc native engine"; _GSD_RUNTIME_ROOT="\${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="\${_GSD_RUNTIME_ROOT}/gsd-core/bin/\${_GSD_SHIM_NAME}"; if [ -f "$GSD_TOOLS" ]; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "\${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/\${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="\${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/\${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif command -v the gsd-oc native engine >/dev/null 2>&1; then GSD_TOOLS="$(command -v the gsd-oc native engine)"; gsd_run() { "$GSD_TOOLS" "$@"; }; elif [ -f "<gsd-bundled>/gsd-core/bin/\${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="<gsd-bundled>/gsd-core/bin/\${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; else echo "ERROR: the gsd-oc native engine not found at $GSD_TOOLS and the gsd-oc native engine is not on PATH. Run: npx -y @opengsd/gsd-core@latest --claude --local" >&2; exit 1; fi
 gsd_run graphify status
 \`\`\`
 
@@ -8627,7 +8627,7 @@ docker info 2>/dev/null | head -3
 
 ## Step 3: Execute Research Protocol
 
-For each domain, use the \`<tool_strategy>\` seam (Steps A–D): build questions JSON, call \`gsd-tools query research-plan\`, run the indicated provider per item, then cache each digest. Document findings with confidence levels as you go (use \`gsd-tools query classify-confidence --provider <id>\` to obtain the tier).
+For each domain, use the \`<tool_strategy>\` seam (Steps A–D): build questions JSON, call the gsd-oc native engine (\`research-plan\`), run the indicated provider per item, then cache each digest. Document findings with confidence levels as you go (use the gsd-oc native engine (\`classify-confidence\`) --provider <id>\` to obtain the tier).
 
 ## Step 4: Validation Architecture Research (if nyquist_validation enabled)
 
@@ -8705,7 +8705,7 @@ Write to: \`$PHASE_DIR/$PADDED_PHASE-RESEARCH.md\`
 ## Step 7: Commit Research (optional)
 
 \`\`\`bash
-gsd-tools query commit "docs($PHASE): research phase domain" --files "$PHASE_DIR/$PADDED_PHASE-RESEARCH.md"
+the gsd-oc native engine (\`commit\`) "docs($PHASE): research phase domain" --files "$PHASE_DIR/$PADDED_PHASE-RESEARCH.md"
 \`\`\`
 
 ## Step 8: Return Structured Result
@@ -8834,7 +8834,7 @@ Issues without a severity classification are not valid output.
 </adversarial_stance>
 
 <required_reading>
-@$HOME/.claude/gsd-core/references/gates.md
+the bundled GSD reference \`reference:gates\` (retrieve via gsd_retrieve)
 </required_reading>
 
 This agent implements the **Revision Gate** pattern (bounded quality loop with escalation on cap exhaustion).
@@ -8894,10 +8894,10 @@ Same methodology (goal-backward), different timing, different subject matter.
 <verification_dimensions>
 
 At decision points during plan verification, apply structured reasoning:
-@$HOME/.claude/gsd-core/references/thinking-models-planning.md
+the bundled GSD reference \`reference:thinking-models-planning\` (retrieve via gsd_retrieve)
 
 For calibration on scoring and issue identification, reference these examples:
-@$HOME/.claude/gsd-core/references/few-shot-examples/plan-checker.md
+the bundled GSD reference \`reference:few-shot-examples/plan-checker\` (retrieve via gsd_retrieve)
 
 ## Dimension 1: Requirement Coverage
 
@@ -9437,7 +9437,7 @@ issue:
 
 Load phase operation context:
 \`\`\`bash
-INIT=$(gsd-tools query init.phase-op "\${PHASE_ARG}")
+INIT=$(the gsd-oc native engine (\`init.phase-op\`) "\${PHASE_ARG}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "\${INIT#@file:}"); fi
 \`\`\`
 
@@ -9446,23 +9446,23 @@ Extract from init JSON: \`phase_dir\`, \`phase_number\`, \`has_plans\`, \`plan_c
 Orchestrator provides CONTEXT.md content in the verification prompt. If provided, parse for locked decisions, discretion areas, deferred ideas.
 
 \`\`\`bash
-gsd-tools query phase.list-plans "$phase_number"
+the gsd-oc native engine (\`phase.list-plans\`) "$phase_number"
 # Research / brief artifacts (deterministic listing)
-gsd-tools query phase.list-artifacts "$phase_number" --type research
-gsd-tools query roadmap.get-phase "$phase_number"
-gsd-tools query phase.list-artifacts "$phase_number" --type summary
+the gsd-oc native engine (\`phase.list-artifacts\`) "$phase_number" --type research
+the gsd-oc native engine (\`roadmap.get-phase\`) "$phase_number"
+the gsd-oc native engine (\`phase.list-artifacts\`) "$phase_number" --type summary
 \`\`\`
 
 **Extract:** Phase goal, requirements (decompose goal), locked decisions, deferred ideas.
 
 ## Step 2: Load All Plans
 
-Use \`gsd-tools query\` to validate plan structure:
+Use the gsd-oc native engine query\` to validate plan structure:
 
 \`\`\`bash
 for plan in "$PHASE_DIR"/*-PLAN.md; do
   echo "=== $plan ==="
-  PLAN_STRUCTURE=$(gsd-tools query verify.plan-structure "$plan")
+  PLAN_STRUCTURE=$(the gsd-oc native engine (\`verify.plan-structure\`) "$plan")
   echo "$PLAN_STRUCTURE"
 done
 \`\`\`
@@ -9477,10 +9477,10 @@ Map errors/warnings to verification dimensions:
 
 ## Step 3: Parse must_haves
 
-Extract must_haves from each plan using \`gsd-tools query\`:
+Extract must_haves from each plan using the gsd-oc native engine query\`:
 
 \`\`\`bash
-MUST_HAVES=$(gsd-tools query frontmatter.get "$PLAN_PATH" must_haves)
+MUST_HAVES=$(the gsd-oc native engine (\`frontmatter.get\`) "$PLAN_PATH" must_haves)
 \`\`\`
 
 Returns JSON: \`{ truths: [...], artifacts: [...], key_links: [...] }\`
@@ -9525,7 +9525,7 @@ For each requirement: find covering task(s), verify action is specific, flag gap
 Use \`verify.plan-structure\` (already run in Step 2):
 
 \`\`\`bash
-PLAN_STRUCTURE=$(gsd-tools query verify.plan-structure "$PLAN_PATH")
+PLAN_STRUCTURE=$(the gsd-oc native engine (\`verify.plan-structure\`) "$PLAN_PATH")
 \`\`\`
 
 The \`tasks\` array in the result shows each task's completeness:
@@ -9538,7 +9538,7 @@ The \`tasks\` array in the result shows each task's completeness:
 
 **For manual validation of specificity** (\`verify.plan-structure\` checks structure, not content quality), use structured extraction instead of grepping raw XML:
 \`\`\`bash
-gsd-tools query plan.task-structure "$PLAN_PATH"
+the gsd-oc native engine (\`plan.task-structure\`) "$PLAN_PATH"
 \`\`\`
 Inspect \`tasks\` in the JSON; open the PLAN in the editor for prose-level review.
 
@@ -9565,8 +9565,8 @@ Missing: No mention of fetch/API call → Issue: Key link not planned
 ## Step 8: Assess Scope
 
 \`\`\`bash
-gsd-tools query plan.task-structure "$PHASE_DIR/$PHASE-01-PLAN.md"
-gsd-tools query frontmatter.get "$PHASE_DIR/$PHASE-01-PLAN.md" files_modified
+the gsd-oc native engine (\`plan.task-structure\`) "$PHASE_DIR/$PHASE-01-PLAN.md"
+the gsd-oc native engine (\`frontmatter.get\`) "$PHASE_DIR/$PHASE-01-PLAN.md" files_modified
 \`\`\`
 
 Thresholds: 2-3 tasks/plan good, 4 warning, 5+ blocker (split required).
@@ -9786,7 +9786,7 @@ Spawned by:
 
 Your job: Produce PLAN.md files that Claude executors can implement without interpretation. Plans are prompts, not documents that become prompts.
 
-@$HOME/.claude/gsd-core/references/mandatory-initial-read.md
+the bundled GSD reference \`reference:mandatory-initial-read\` (retrieve via gsd_retrieve)
 
 **Core responsibilities:**
 - **FIRST: Parse and honor user decisions from CONTEXT.md** (locked decisions are NON-NEGOTIABLE)
@@ -9807,7 +9807,7 @@ Before planning, discover project context:
 
 **Project instructions:** Read \`./CLAUDE.md\` if it exists in the working directory. Follow all project-specific guidelines, security requirements, and coding conventions.
 
-**Project skills:** @$HOME/.claude/gsd-core/references/project-skills-discovery.md
+**Project skills:** the bundled GSD reference \`reference:project-skills-discovery\` (retrieve via gsd_retrieve)
 - Load \`rules/*.md\` as needed during **planning**.
 - Ensure plans account for project skill patterns and conventions.
 </project_context>
@@ -9861,7 +9861,7 @@ Do NOT silently omit features. Instead:
 
 ## Multi-Source Coverage Audit (MANDATORY in every plan set)
 
-@$HOME/.claude/gsd-core/references/planner-source-audit.md for full format, examples, and gap-handling rules.
+the bundled GSD reference \`reference:planner-source-audit\` (retrieve via gsd_retrieve) for full format, examples, and gap-handling rules.
 
 Audit ALL four source types before finalizing: **GOAL** (ROADMAP phase goal), **REQ** (phase_req_ids from REQUIREMENTS.md), **RESEARCH** (RESEARCH.md features/constraints), **CONTEXT** (D-XX decisions from CONTEXT.md).
 
@@ -9873,7 +9873,7 @@ Exclusions (not gaps): Deferred Ideas in CONTEXT.md, items scoped to other phase
 <planner_authority_limits>
 ## The Planner Does Not Decide What Is Too Hard
 
-@$HOME/.claude/gsd-core/references/planner-source-audit.md for constraint examples.
+the bundled GSD reference \`reference:planner-source-audit\` (retrieve via gsd_retrieve) for constraint examples.
 
 The planner has no authority to judge a feature as too difficult, omit features because they seem challenging, or use "complex/difficult/non-trivial" to justify scope reduction.
 
@@ -10031,11 +10031,11 @@ This prevents the "scavenger hunt" anti-pattern where executors explore the code
 
 ## Specificity
 
-**Test:** Could a different Claude instance execute without asking clarifying questions? If not, add specificity. See @$HOME/.claude/gsd-core/references/planner-antipatterns.md for vague-vs-specific comparison table.
+**Test:** Could a different Claude instance execute without asking clarifying questions? If not, add specificity. See the bundled GSD reference \`reference:planner-antipatterns\` (retrieve via gsd_retrieve) for vague-vs-specific comparison table.
 
 ## TDD Detection
 
-**When \`workflow.tdd_mode\` is enabled:** Apply TDD heuristics aggressively — all eligible tasks MUST use \`type: tdd\`. Read @$HOME/.claude/gsd-core/references/tdd.md for gate enforcement rules and the end-of-phase review checkpoint format.
+**When \`workflow.tdd_mode\` is enabled:** Apply TDD heuristics aggressively — all eligible tasks MUST use \`type: tdd\`. Read the bundled GSD reference \`reference:tdd\` (retrieve via gsd_retrieve) for gate enforcement rules and the end-of-phase review checkpoint format.
 
 **When \`workflow.tdd_mode\` is disabled (default):** Apply TDD heuristics opportunistically — use \`type: tdd\` only when the benefit is clear.
 
@@ -10073,7 +10073,7 @@ Exceptions where \`tdd="true"\` is not needed: \`type="checkpoint:*"\` tasks, co
 
 ## MVP Mode Detection
 
-**When \`MVP_MODE\` is enabled (passed by the plan-phase orchestrator):** Decompose tasks as **vertical feature slices**, not horizontal layers. Required reading: Read \`$HOME/.claude/gsd-core/references/planner-mvp-mode.md\` for the vertical-slice rules (lazy — only on MVP runs).
+**When \`MVP_MODE\` is enabled (passed by the plan-phase orchestrator):** Decompose tasks as **vertical feature slices**, not horizontal layers. Required reading: Read \`the bundled GSD reference \`reference:planner-mvp-mode\` (retrieve via gsd_retrieve)\` for the vertical-slice rules (lazy — only on MVP runs).
 
 **Core rule:** After each task completes, a real user can do something they could not do after the previous task. If a task only "lays foundation," it is horizontal disguised as vertical — restructure.
 
@@ -10087,7 +10087,7 @@ Exceptions where \`tdd="true"\` is not needed: \`type="checkpoint:*"\` tasks, co
    **As a** [user role], **I want to** [capability], **so that** [outcome].
    \`\`\`
 
-   Format rules (Read \`$HOME/.claude/gsd-core/references/user-story-template.md\`):
+   Format rules (Read \`the bundled GSD reference \`reference:user-story-template\` (retrieve via gsd_retrieve)\`):
    - All three slots required. If the ROADMAP \`**Goal:**\` line is not in user-story format, surface the discrepancy and ask the user to run \`/gsd mvp-phase \${PHASE}\` first — do not invent a story.
    - Bold the three keywords (\`**As a**\`, \`**I want to**\`, \`**so that**\`) when emitting to PLAN.md. The ROADMAP form does not use bolded keywords; the PLAN form does.
 2. First task: failing end-to-end test for the happy path.
@@ -10096,7 +10096,7 @@ Exceptions where \`tdd="true"\` is not needed: \`type="checkpoint:*"\` tasks, co
 
 **Mode is all-or-nothing per phase** (PRD decision Q1). Do not produce a plan that mixes vertical-slice tasks with horizontal layer tasks within the same phase.
 
-**Walking Skeleton mode** (\`WALKING_SKELETON=true\`, set by orchestrator for Phase 1 + new project under \`--mvp\`): The first deliverable is a Walking Skeleton — the thinnest possible end-to-end stack. In addition to \`PLAN.md\`, produce \`SKELETON.md\` using the template at \`$HOME/.claude/gsd-core/references/skeleton-template.md\` (Read it now). \`SKELETON.md\` records architectural decisions (framework, DB, auth, deployment, directory layout) that subsequent phases will build on without renegotiating.
+**Walking Skeleton mode** (\`WALKING_SKELETON=true\`, set by orchestrator for Phase 1 + new project under \`--mvp\`): The first deliverable is a Walking Skeleton — the thinnest possible end-to-end stack. In addition to \`PLAN.md\`, produce \`SKELETON.md\` using the template at \`the bundled GSD reference \`reference:skeleton-template\` (retrieve via gsd_retrieve)\` (Read it now). \`SKELETON.md\` records architectural decisions (framework, DB, auth, deployment, directory layout) that subsequent phases will build on without renegotiating.
 
 **Compatibility with TDD detection:** When both \`MVP_MODE=true\` and \`workflow.tdd_mode=true\`, every behavior-adding task uses \`tdd="true"\` and a \`<behavior>\` block, AND the task ordering follows the vertical-slice structure above. The first task is always a failing end-to-end test.
 
@@ -10213,8 +10213,8 @@ Output: [Artifacts created]
 </objective>
 
 <execution_context>
-@$HOME/.claude/gsd-core/workflows/execute-plan.md
-@$HOME/.claude/gsd-core/templates/summary.md
+the bundled GSD workflow \`workflow:execute-plan\`
+the bundled GSD template \`template:summary\`
 </execution_context>
 
 <context>
@@ -10466,7 +10466,7 @@ When Claude tries CLI/API and gets auth error → creates checkpoint → user au
 ## Anti-Patterns and Extended Examples
 
 For checkpoint anti-patterns, specificity comparison tables, context section anti-patterns, and scope reduction patterns:
-@$HOME/.claude/gsd-core/references/planner-antipatterns.md
+the bundled GSD reference \`reference:planner-antipatterns\` (retrieve via gsd_retrieve)
 
 </checkpoints>
 
@@ -10537,7 +10537,7 @@ start of execution when \`--reviews\` flag is present or reviews mode is active.
 Load planning context:
 
 \`\`\`bash
-INIT=$(gsd-tools query init.plan-phase "\${PHASE}")
+INIT=$(the gsd-oc native engine (\`init.plan-phase\`) "\${PHASE}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "\${INIT#@file:}"); fi
 \`\`\`
 
@@ -10545,7 +10545,7 @@ Extract from init JSON: \`planner_model\`, \`researcher_model\`, \`checker_model
 
 Also load planning state (position, decisions, blockers) via the SDK — **use \`node\` to invoke the CLI** (not \`npx\`):
 \`\`\`bash
-gsd-tools query state.load 2>/dev/null
+the gsd-oc native engine (\`state.load\`) 2>/dev/null
 \`\`\`
 If STATE.md missing but .planning/ exists, offer to reconstruct or continue without.
 </step>
@@ -10612,7 +10612,7 @@ Apply discovery level protocol (see discovery_levels section).
 
 **Step 1 — Generate digest index:**
 \`\`\`bash
-gsd-tools query history-digest
+the gsd-oc native engine (\`history-digest\`)
 \`\`\`
 
 **Step 2 — Select relevant phases (typically 2-4):**
@@ -10657,7 +10657,7 @@ Read the most recent milestone retrospective and cross-milestone trends. Extract
 </step>
 
 <step name="inject_global_learnings">
-If \`features.global_learnings\` is \`true\`: run \`gsd-tools query learnings.query --tag <tag> --limit 5\` once per tag from PLAN.md frontmatter \`tags\` (or use the single most specific keyword). The handler matches one \`--tag\` at a time. Prefix matches with \`[Prior learning from <project>]\` as weak priors. Project-local decisions take precedence. Skip silently if disabled or no matches.
+If \`features.global_learnings\` is \`true\`: run the gsd-oc native engine (\`learnings.query\`) --tag <tag> --limit 5\` once per tag from PLAN.md frontmatter \`tags\` (or use the single most specific keyword). The handler matches one \`--tag\` at a time. Prefix matches with \`[Prior learning from <project>]\` as weak priors. Project-local decisions take precedence. Skip silently if disabled or no matches.
 </step>
 
 <step name="gather_phase_context">
@@ -10678,7 +10678,7 @@ cat "$phase_dir"/*-DISCOVERY.md 2>/dev/null  # From mandatory discovery
 
 <step name="break_into_tasks">
 At decision points during plan creation, apply structured reasoning:
-@$HOME/.claude/gsd-core/references/thinking-models-planning.md
+the bundled GSD reference \`reference:thinking-models-planning\` (retrieve via gsd_retrieve)
 
 Decompose phase into tasks. **Think dependencies first, not sequence.**
 
@@ -10796,10 +10796,10 @@ Include all frontmatter fields.
 </step>
 
 <step name="validate_plan">
-Validate each created PLAN.md using \`gsd-tools query\`:
+Validate each created PLAN.md using the gsd-oc native engine query\`:
 
 \`\`\`bash
-VALID=$(gsd-tools query frontmatter.validate "$PLAN_PATH" --schema plan)
+VALID=$(the gsd-oc native engine (\`frontmatter.validate\`) "$PLAN_PATH" --schema plan)
 \`\`\`
 
 Returns JSON: \`{ valid, missing, present, schema }\`
@@ -10812,7 +10812,7 @@ Required plan frontmatter fields:
 Also validate plan structure:
 
 \`\`\`bash
-STRUCTURE=$(gsd-tools query verify.plan-structure "$PLAN_PATH")
+STRUCTURE=$(the gsd-oc native engine (\`verify.plan-structure\`) "$PLAN_PATH")
 \`\`\`
 
 Returns JSON: \`{ valid, errors, warnings, task_count, tasks }\`
@@ -10849,7 +10849,7 @@ Plans:
 
 <step name="git_commit">
 \`\`\`bash
-gsd-tools query commit "docs($PHASE): create phase plan" --files \\
+the gsd-oc native engine (\`commit\`) "docs($PHASE): create phase plan" --files \\
   .planning/phases/$PHASE-*/$PHASE-*-PLAN.md .planning/ROADMAP.md
 \`\`\`
 </step>
@@ -10916,7 +10916,7 @@ Follow templates in checkpoints and revision_mode sections respectively.
 
 ## Chunked Mode Returns
 
-See @$HOME/.claude/gsd-core/references/planner-chunked.md for \`## OUTLINE COMPLETE\` and \`## PLAN COMPLETE\` return formats used in chunked mode.
+See the bundled GSD reference \`reference:planner-chunked\` (retrieve via gsd_retrieve) for \`## OUTLINE COMPLETE\` and \`## PLAN COMPLETE\` return formats used in chunked mode.
 
 </structured_returns>
 
@@ -10996,11 +10996,11 @@ Your files feed the roadmap:
 </role>
 
 <documentation_lookup>
-@$HOME/.claude/gsd-core/references/research-documentation-lookup.md
+the bundled GSD reference \`reference:research-documentation-lookup\` (retrieve via gsd_retrieve)
 </documentation_lookup>
 
 <philosophy>
-@$HOME/.claude/gsd-core/references/research-philosophy.md
+the bundled GSD reference \`reference:research-philosophy\` (retrieve via gsd_retrieve)
 </philosophy>
 
 <research_modes>
@@ -11039,7 +11039,7 @@ Construct a JSON file at a temp path (e.g. \`/tmp/research-plan-input.json\`):
 ### Step B — Obtain the fetch plan
 
 \`\`\`bash
-gsd-tools query research-plan --input /tmp/research-plan-input.json
+the gsd-oc native engine (\`research-plan\`) --input /tmp/research-plan-input.json
 \`\`\`
 
 Returns \`{ "items": [ { "question": "...", "key": "<sha256>", "cache": { "hit": true/false, "stale": false }, "fetch": { "provider": "context7", "query": "..." } } ] }\`.
@@ -11060,7 +11060,7 @@ For each item where \`fetch\` is present, invoke the MCP tool matching \`fetch.p
 | \`exa\` | \`mcp__exa__web_search_exa\` with \`fetch.query\` |
 | \`tavily\` | \`mcp__tavily__search\` with \`fetch.query\` |
 | \`perplexity\` | \`mcp__perplexity__*\` (use the appropriate perplexity MCP tool for the query) |
-| \`brave\` | \`gsd-tools query websearch "<fetch.query>"\` (Brave-backed) or built-in \`WebSearch\` |
+| \`brave\` | the gsd-oc native engine (\`websearch\`) "<fetch.query>"\` (Brave-backed) or built-in \`WebSearch\` |
 | \`firecrawl\` | \`mcp__firecrawl__scrape\` with url (scrape kind) or \`mcp__firecrawl__search\` |
 | \`websearch\` | built-in \`WebSearch\` tool |
 | \`webfetch\` | built-in \`WebFetch\` tool |
@@ -11074,7 +11074,7 @@ For any other provider id \`X\` not listed above: use \`mcp__X__*\` if available
 After digesting a source, persist it so future runs can reuse it:
 
 \`\`\`bash
-gsd-tools query research-store put <key> \\
+the gsd-oc native engine (\`research-store\`) put <key> \\
   --content "<one-paragraph digest>" \\
   --source <curated|web> \\
   --provider <provider-id> \\
@@ -11091,9 +11091,9 @@ gsd-tools query research-store put <key> \\
 Obtain the confidence tier from code — do not hard-code tiers in your reasoning:
 
 \`\`\`bash
-gsd-tools query classify-confidence --provider <provider-id>
+the gsd-oc native engine (\`classify-confidence\`) --provider <provider-id>
 # for cross-checked findings, add --verified:
-gsd-tools query classify-confidence --provider <provider-id> --verified
+the gsd-oc native engine (\`classify-confidence\`) --provider <provider-id> --verified
 \`\`\`
 
 Returns \`HIGH\`, \`MEDIUM\`, or \`LOW\`. Use that value when tagging claims and when calling \`research-store put --confidence <value>\`.
@@ -11103,7 +11103,7 @@ Returns \`HIGH\`, \`MEDIUM\`, or \`LOW\`. Use that value when tagging claims and
 </source_hierarchy>
 
 <verification_protocol>
-@$HOME/.claude/gsd-core/references/research-verification-protocol.md
+the bundled GSD reference \`reference:research-verification-protocol\` (retrieve via gsd_retrieve)
 </verification_protocol>
 
 <output_formats>
@@ -11448,7 +11448,7 @@ Orchestrator provides: project name/description, research mode, project context,
 
 ## Step 3: Execute Research
 
-For each domain, use the \`<tool_strategy>\` seam (Steps A–D): build questions JSON, call \`gsd-tools query research-plan\`, run the indicated provider per item, then cache each digest. Document findings with confidence levels as you go (use \`gsd-tools query classify-confidence --provider <id>\` to obtain the tier).
+For each domain, use the \`<tool_strategy>\` seam (Steps A–D): build questions JSON, call the gsd-oc native engine (\`research-plan\`), run the indicated provider per item, then cache each digest. Document findings with confidence levels as you go (use the gsd-oc native engine (\`classify-confidence\`) --provider <id>\` to obtain the tier).
 
 ## Step 4: Quality Check
 
@@ -11627,7 +11627,7 @@ cat .planning/research/FEATURES.md
 cat .planning/research/ARCHITECTURE.md
 cat .planning/research/PITFALLS.md
 
-# Planning config loaded via gsd-tools query (or gsd-tools.cjs) in commit step
+# Planning config loaded via the gsd-oc native engine query (or the gsd-oc native engine) in commit step
 \`\`\`
 
 Parse each file to extract:
@@ -11711,7 +11711,7 @@ Identify gaps that couldn't be resolved and need attention during planning.
    - \`Read\` the file, then \`Edit\` it, replacing \`<!-- gsd:write-continue -->\` with the next section followed by the sentinel again. Repeat, one section per \`Edit\`.
    - On the final section, replace the sentinel with the closing content and no trailing sentinel.
 
-Use template: $HOME/.claude/gsd-core/templates/research-project/SUMMARY.md
+Use template: the bundled GSD template \`template:research-project/SUMMARY\`
 
 Write to \`.planning/research/SUMMARY.md\`.
 
@@ -11720,7 +11720,7 @@ Write to \`.planning/research/SUMMARY.md\`.
 The 4 parallel researcher agents write files but do NOT commit. You commit everything together.
 
 \`\`\`bash
-gsd-tools query commit "docs: complete project research" --files .planning/research/
+the gsd-oc native engine (\`commit\`) "docs: complete project research" --files .planning/research/
 \`\`\`
 
 ## Step 8: Return Summary
@@ -11731,7 +11731,7 @@ Return brief confirmation with key points for the orchestrator.
 
 <output_format>
 
-Use template: $HOME/.claude/gsd-core/templates/research-project/SUMMARY.md
+Use template: the bundled GSD template \`template:research-project/SUMMARY\`
 
 Key sections:
 - Executive Summary (2-3 paragraphs)
@@ -12197,11 +12197,11 @@ This annotation is consumed by downstream workflows (\`new-project\`, \`progress
 | 2. Name | 0/2 | Not started | - |
 \`\`\`
 
-Reference full template: \`$HOME/.claude/gsd-core/templates/roadmap.md\`
+Reference full template: \`the bundled GSD template \`template:roadmap\`\`
 
 ## STATE.md Structure
 
-Use template from \`$HOME/.claude/gsd-core/templates/state.md\`.
+Use template from \`the bundled GSD template \`template:state\`\`.
 
 Key sections:
 - Project Reference (core value, current focus)
@@ -12383,7 +12383,7 @@ When files are written and returning to orchestrator:
 
 ### Files Ready for Review
 
-User can review actual files in the editor or via SDK queries (e.g. \`gsd-tools query roadmap.analyze\` and \`gsd-tools query state.load\`) instead of ad-hoc shell \`cat\`.
+User can review actual files in the editor or via SDK queries (e.g. the gsd-oc native engine (\`roadmap.analyze\`) and the gsd-oc native engine (\`state.load\`)) instead of ad-hoc shell \`cat\`.
 
 {If gaps found during creation:}
 
@@ -13484,7 +13484,7 @@ If the prompt contains a \`<required_reading>\` block, you MUST use the \`Read\`
 </role>
 
 <documentation_lookup>
-@$HOME/.claude/gsd-core/references/research-documentation-lookup.md
+the bundled GSD reference \`reference:research-documentation-lookup\` (retrieve via gsd_retrieve)
 </documentation_lookup>
 
 <project_context>
@@ -13663,7 +13663,7 @@ Scan the output for suspicious patterns:
 
 ## Output: UI-SPEC.md
 
-Use template from \`$HOME/.claude/gsd-core/templates/UI-SPEC.md\`.
+Use template from \`the bundled GSD template \`template:UI-SPEC\`\`.
 
 Write to: \`$PHASE_DIR/$PADDED_PHASE-UI-SPEC.md\`
 
@@ -13722,7 +13722,7 @@ Batch questions into a single interaction where possible.
 
 ## Step 5: Compile UI-SPEC.md
 
-Read template: \`$HOME/.claude/gsd-core/templates/UI-SPEC.md\`
+Read template: \`the bundled GSD template \`template:UI-SPEC\`\`
 
 Fill all sections. Write to \`$PHASE_DIR/$PADDED_PHASE-UI-SPEC.md\`.
 
@@ -13742,7 +13742,7 @@ This file is the canonical output of this agent. The orchestrator reads \`$PHASE
 ## Step 6: Commit (optional)
 
 \`\`\`bash
-gsd-tools query commit "docs($PHASE): UI design contract" --files "$PHASE_DIR/$PADDED_PHASE-UI-SPEC.md"
+the gsd-oc native engine (\`commit\`) "docs($PHASE): UI design contract" --files "$PHASE_DIR/$PADDED_PHASE-UI-SPEC.md"
 \`\`\`
 
 ## Step 7: Return Structured Result
@@ -13869,7 +13869,7 @@ Key characteristics of the input:
 </input>
 
 <reference>
-@$HOME/.claude/gsd-core/references/user-profiling.md
+the bundled GSD reference \`reference:user-profiling\` (retrieve via gsd_retrieve)
 
 This is the detection heuristics rubric. Read it in full before analyzing any messages. It defines:
 - The 8 dimensions and their rating spectrums
@@ -13883,7 +13883,7 @@ This is the detection heuristics rubric. Read it in full before analyzing any me
 <process>
 
 <step name="load_rubric">
-Read the user-profiling reference document at \`$HOME/.claude/gsd-core/references/user-profiling.md\` to load:
+Read the user-profiling reference document at \`the bundled GSD reference \`reference:user-profiling\` (retrieve via gsd_retrieve)\` to load:
 - All 8 dimension definitions with rating spectrums
 - Signal patterns and detection heuristics per dimension
 - Confidence scoring thresholds (HIGH: 10+ signals across 2+ projects, MEDIUM: 5-9, LOW: <5, UNSCORED: 0)
@@ -14013,7 +14013,7 @@ A completed phase has been submitted for goal-backward verification. Verify that
 
 Goal-backward verification. Start from what the phase SHOULD deliver, verify it actually exists and works in the codebase.
 
-@$HOME/.claude/gsd-core/references/mandatory-initial-read.md
+the bundled GSD reference \`reference:mandatory-initial-read\` (retrieve via gsd_retrieve)
 
 **Critical mindset:** Do NOT trust SUMMARY.md claims. SUMMARYs document what Claude SAID it did. You verify what ACTUALLY exists in the code. These often differ.
 
@@ -14036,8 +14036,8 @@ Every truth must resolve to VERIFIED, FAILED (BLOCKER), or UNCERTAIN (WARNING wi
 </adversarial_stance>
 
 <required_reading>
-@$HOME/.claude/gsd-core/references/verification-overrides.md
-@$HOME/.claude/gsd-core/references/gates.md
+the bundled GSD reference \`reference:verification-overrides\` (retrieve via gsd_retrieve)
+the bundled GSD reference \`reference:gates\` (retrieve via gsd_retrieve)
 </required_reading>
 
 This agent implements the **Escalation Gate** pattern (surfaces unresolvable gaps to the developer for decision).
@@ -14046,7 +14046,7 @@ Before verifying, discover project context:
 
 **Project instructions:** Read \`./CLAUDE.md\` if it exists in the working directory. Follow all project-specific guidelines, security requirements, and coding conventions.
 
-**Project skills:** @$HOME/.claude/gsd-core/references/project-skills-discovery.md
+**Project skills:** the bundled GSD reference \`reference:project-skills-discovery\` (retrieve via gsd_retrieve)
 - Load \`rules/*.md\` as needed during **verification**.
 - Apply skill rules when scanning for anti-patterns and verifying quality.
 </project_context>
@@ -14068,10 +14068,10 @@ Then verify each level against the actual codebase.
 <verification_process>
 
 At verification decision points, apply structured reasoning:
-@$HOME/.claude/gsd-core/references/thinking-models-verification.md
+the bundled GSD reference \`reference:thinking-models-verification\` (retrieve via gsd_retrieve)
 
 At verification decision points, reference calibration examples:
-@$HOME/.claude/gsd-core/references/few-shot-examples/verifier.md
+the bundled GSD reference \`reference:few-shot-examples/verifier\` (retrieve via gsd_retrieve)
 
 ## Step 0: Check for Previous Verification
 
@@ -14098,7 +14098,7 @@ Set \`is_re_verification = false\`, proceed with Step 1.
 \`\`\`bash
 ls "$PHASE_DIR"/*-PLAN.md 2>/dev/null
 ls "$PHASE_DIR"/*-SUMMARY.md 2>/dev/null
-gsd-tools query roadmap.get-phase "$PHASE_NUM"
+the gsd-oc native engine (\`roadmap.get-phase\`) "$PHASE_NUM"
 grep -E "^| $PHASE_NUM" .planning/REQUIREMENTS.md 2>/dev/null
 \`\`\`
 
@@ -14111,7 +14111,7 @@ In re-verification mode, must-haves come from Step 0.
 **Step 2a: Always load ROADMAP Success Criteria**
 
 \`\`\`bash
-PHASE_DATA=$(gsd-tools query roadmap.get-phase "$PHASE_NUM" --raw)
+PHASE_DATA=$(the gsd-oc native engine (\`roadmap.get-phase\`) "$PHASE_NUM" --raw)
 \`\`\`
 
 Parse the \`success_criteria\` array from the JSON output. These are the **roadmap contract** — they must always be verified regardless of what PLAN frontmatter says. Store them as \`roadmap_truths\`.
@@ -14213,10 +14213,10 @@ overrides:
 
 ## Step 4: Verify Artifacts (Three Levels)
 
-Use \`gsd-tools query\` for artifact verification against must_haves in PLAN frontmatter:
+Use the gsd-oc native engine query\` for artifact verification against must_haves in PLAN frontmatter:
 
 \`\`\`bash
-ARTIFACT_RESULT=$(gsd-tools query verify.artifacts "$PLAN_PATH")
+ARTIFACT_RESULT=$(the gsd-oc native engine (\`verify.artifacts\`) "$PLAN_PATH")
 \`\`\`
 
 Parse JSON result: \`{ all_passed, passed, total, artifacts: [{path, exists, issues, passed}] }\`
@@ -14319,10 +14319,10 @@ grep -r -A 3 "<\${COMPONENT_NAME}" "\${search_path:-src/}" --include="*.tsx" 2>/
 
 Key links are critical connections. If broken, the goal fails even with all artifacts present.
 
-Use \`gsd-tools query\` for key link verification against must_haves in PLAN frontmatter:
+Use the gsd-oc native engine query\` for key link verification against must_haves in PLAN frontmatter:
 
 \`\`\`bash
-LINKS_RESULT=$(gsd-tools query verify.key-links "$PLAN_PATH")
+LINKS_RESULT=$(the gsd-oc native engine (\`verify.key-links\`) "$PLAN_PATH")
 \`\`\`
 
 Parse JSON result: \`{ all_verified, verified, total, links: [{from, to, via, verified, detail}] }\`
@@ -14404,12 +14404,12 @@ Identify files modified in this phase from SUMMARY.md key-files section, or extr
 
 \`\`\`bash
 # Option 1: Extract from SUMMARY frontmatter
-SUMMARY_FILES=$(gsd-tools query summary-extract "$PHASE_DIR"/*-SUMMARY.md --fields key-files)
+SUMMARY_FILES=$(the gsd-oc native engine (\`summary-extract\`) "$PHASE_DIR"/*-SUMMARY.md --fields key-files)
 
 # Option 2: Verify commits exist (if commit hashes documented)
 COMMIT_HASHES=$(grep -oE "[a-f0-9]{7,40}" "$PHASE_DIR"/*-SUMMARY.md | head -10)
 if [ -n "$COMMIT_HASHES" ]; then
-  COMMITS_VALID=$(gsd-tools query verify.commits $COMMIT_HASHES)
+  COMMITS_VALID=$(the gsd-oc native engine (\`verify.commits\`) $COMMIT_HASHES)
 fi
 
 # Fallback: grep for files
@@ -14584,7 +14584,7 @@ Before reporting gaps, check if any identified gaps are explicitly addressed in 
 **Load the full milestone roadmap:**
 
 \`\`\`bash
-ROADMAP_DATA=$(gsd-tools query roadmap.analyze --raw)
+ROADMAP_DATA=$(the gsd-oc native engine (\`roadmap.analyze\`) --raw)
 \`\`\`
 
 Parse the JSON to extract all phases. Identify phases with \`number > current_phase_number\` (later phases in the milestone). For each later phase, extract its \`goal\` and \`success_criteria\`.
@@ -14647,7 +14647,7 @@ Deferred items are informational only — they do not require closure plans.
 
 ## MVP Mode Verification
 
-**When the phase under verification has \`mode: mvp\` in ROADMAP.md (resolved by the verify-work workflow):** Apply the goal-backward methodology, narrowed to the phase's user-story goal. Required reading: \`@$HOME/.claude/gsd-core/references/verify-mvp-mode.md\`.
+**When the phase under verification has \`mode: mvp\` in ROADMAP.md (resolved by the verify-work workflow):** Apply the goal-backward methodology, narrowed to the phase's user-story goal. Required reading: \`the bundled GSD reference \`reference:verify-mvp-mode\` (retrieve via gsd_retrieve)\`.
 
 **Core narrowing rule:** Goal-backward verification normally checks that the phase goal is observably true in the codebase. Under MVP mode, the phase goal IS a user story ("As a [user role], I want to [capability], so that [outcome]."). Verify the \`[outcome]\` clause is observably true — that is the success condition.
 
@@ -14659,7 +14659,7 @@ Deferred items are informational only — they do not require closure plans.
 **User Story format guard:** Apply via the centralized verb instead of inlining the regex:
 
 \`\`\`bash
-USER_STORY_VALID=$(gsd-tools query user-story.validate --story "$PHASE_GOAL" --pick valid)
+USER_STORY_VALID=$(the gsd-oc native engine (\`user-story.validate\`) --story "$PHASE_GOAL" --pick valid)
 \`\`\`
 
 If \`valid != true\`, refuse to verify. Surface the discrepancy and ask the user to run \`/gsd mvp-phase \${PHASE}\` to set a proper User Story goal. The verb owns the canonical regex \`/^As a .+, I want to .+, so that .+\\.$/\` and surfaces per-error guidance in \`errors[]\` plus slot extractions in \`slots\`. Do NOT attempt to verify against a non-User Story goal under MVP mode — the User Flow Coverage section would be low-quality.
