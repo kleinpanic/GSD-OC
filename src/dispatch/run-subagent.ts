@@ -109,9 +109,15 @@ export async function runSubagent(
   api: RunSubagentApi,
   agentId: string,
   message: string,
-  opts: { timeoutMs?: number; cleanup?: boolean } = {},
+  opts: { timeoutMs?: number; cleanup?: boolean; baseAgentId?: string } = {},
 ): Promise<RunSubagentResult> {
-  const sessionKey = buildAgentMainSessionKey({ agentId });
+  // GSD subagents (gsd-executor, gsd-planner…) are PERSONAS, not allowlisted OpenClaw agents — spawning a
+  // session keyed directly on `gsd-*` fails the host's subagents.allowAgents check ("not in allowlist").
+  // When a real base agent is given, run the persona as a SUB-LANE of it (agent:<base>:<gsd-role>) so the
+  // session is owned by an allowed agent; the persona is still injected via extraSystemPrompt below.
+  const sessionKey = opts.baseAgentId
+    ? buildAgentMainSessionKey({ agentId: opts.baseAgentId, mainKey: agentId })
+    : buildAgentMainSessionKey({ agentId });
 
   // D-04: inject the ported agent's persona per-call via extraSystemPrompt
   // (types-Tcpca_5M.d.ts:6369). Unknown ids degrade to Phase-1 behavior (no persona),
