@@ -95,3 +95,17 @@ test("optedOut: each mechanism independently suppresses (ENG-03)", () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+
+test("L-1: a .gsd-off ABOVE the home dir is out of scope; one inside the project is honored", () => {
+  const base = mkdtempSync(join(tmpdir(), "gsd-l1-"));
+  const home = join(base, "home");
+  const proj = join(home, "codeWS", "proj");
+  mkdirSync(proj, { recursive: true });
+  try {
+    writeFileSync(join(base, ".gsd-off"), ""); // ABOVE the fake home — must be ignored
+    assert.equal(hasGsdOffMarker(proj, home), false, "marker above home is out of scope");
+    writeFileSync(join(proj, ".gsd-off"), ""); // inside the project — honored
+    assert.equal(hasGsdOffMarker(proj, home), true);
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});

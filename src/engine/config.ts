@@ -67,11 +67,22 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-/** Deep-merge `override` onto `base` (objects merge, scalars/arrays from override win). */
+/** Keys that would pollute the prototype chain if copied from a parsed JSON config (H-1). */
+const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+/** Deep-merge `override` onto `base` (objects merge, scalars/arrays from override win).
+ *  Hardened against prototype pollution + type confusion: dangerous keys are skipped, and a scalar override
+ *  for an object-typed default is REJECTED (keeps the default) so a malformed config can't silently flip a
+ *  structured field into a wrong-typed scalar. */
 function deepMerge<T>(base: T, override: unknown): T {
-  if (!isObject(base) || !isObject(override)) return (override === undefined ? base : (override as T));
+  if (!isObject(base) || !isObject(override)) {
+    // Type-guard: if the default is an object but the override is a scalar/array, keep the default.
+    if (isObject(base) && override !== undefined && !isObject(override)) return base;
+    return override === undefined ? base : (override as T);
+  }
   const out: Record<string, unknown> = { ...base };
   for (const k of Object.keys(override)) {
+    if (DANGEROUS_KEYS.has(k)) continue;
     out[k] = k in out ? deepMerge((base as Record<string, unknown>)[k], override[k]) : override[k];
   }
   return out as T;

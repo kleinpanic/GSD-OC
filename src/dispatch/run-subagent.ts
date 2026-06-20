@@ -147,7 +147,8 @@ export async function runSubagent(
   // Resolve the project's .planning (walk up from cwd) so model_profile is read from the ACTUAL project,
   // not cwd-relative ".planning" (gateway home). Same SDK limit as gsd_state — best-effort; honors a
   // project profile when cwd is inside it, else falls back to the default config (HIGH-1).
-  const planningDir = opts.planningDir ?? (gsdProjectRoot(process.cwd()) ? `${gsdProjectRoot(process.cwd())}/.planning` : ".planning");
+  const projectRoot = opts.planningDir ? null : gsdProjectRoot(process.cwd()); // one walk, not two (IN-01)
+  const planningDir = opts.planningDir ?? (projectRoot ? `${projectRoot}/.planning` : ".planning");
   const model = opts.model ?? resolveModel(agentId, readGsdConfig(planningDir).config);
   if (model) runParams.model = model;
   const { runId } = await api.runtime.subagent.run(runParams);

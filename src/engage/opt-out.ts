@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 /**
@@ -15,14 +16,17 @@ import { dirname, join, resolve } from "node:path";
  * We walk UP from cwd to the filesystem root, checking `${dir}/.gsd-off` and
  * `${dir}/.planning/.gsd-off` at each level (bounded — breaks at root).
  */
-export function hasGsdOffMarker(cwd: string): boolean {
+export function hasGsdOffMarker(cwd: string, home = homedir()): boolean {
   let cur = resolve(cwd);
+  const stopAt = resolve(home);
   for (;;) {
     if (existsSync(join(cur, ".gsd-off")) || existsSync(join(cur, ".planning", ".gsd-off"))) {
       return true;
     }
     const parent = dirname(cur);
-    if (parent === cur) return false; // reached filesystem root
+    // L-1: bound the walk at the user's home dir (inclusive). A `.gsd-off` ABOVE home (e.g. `/.gsd-off`)
+    // is out of GSD's scope — it must not silently disable engage for every user/project on the box.
+    if (parent === cur || cur === stopAt) return false;
     cur = parent;
   }
 }
