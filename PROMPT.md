@@ -37,9 +37,48 @@ auto-engage hook, NO Claude Code runtime / NO ACP-into-Claude target; CC-isms �
 6 routers + toolSearch = 0 Discord slash slots; auto-engage live (agent:bootstrap) → first tool call
 `gsd_workflow`, no `/command`; 160→169 tests green; GPG-signed commits. Tag `v1.0`.
 
-### GOAL B — v1.1 (ACTIVE — paste this into `/goal`, ≤4000 chars)
+### Decision: per-milestone `/goal` prompts (NOT one mega-goal)
+
+Grounded in the three researched sources:
+- `/goal` allows **one active condition per session, ≤4000 chars**, judged each turn by a *fast model that
+  reads only the transcript* (it runs no commands). A whole-project condition is too large and
+  multi-faceted for that evaluator to judge faithfully.
+- Claude best-practices **and** gsd-core both insist on **fresh context per unit** (context rot degrades
+  quality); a single goal forces one ever-growing session.
+- gsd-core's lifecycle is **milestone-based** (discuss→plan→execute→verify→ship per milestone).
+
+So the v1.1 work is sectioned into **four goal-bounded milestones M1–M4** (over roadmap phases 8–15). Set
+one `/goal` per milestone, drive it to its DoD in a focused session, `/clear`, then set the next. **In
+every milestone the top-level Claude is the GSD orchestrator/delegator** — it fans out the 33 subagents
+(all at opus), never hand-codes what a subagent should own.
+
+| Milestone | Phases | Requirements | One-line DoD |
+|---|---|---|---|
+| **M1 — Retrieval Core** | 8–10 | RET-01..07 | `gsd_retrieve` fuses semantic+lexical+trigram over 233 docs, 0 slots |
+| **M2 — Finite-Path + Enforcement** | 11–12 | PATH, ENF, COV | live no-`/command` finite path; all 33 subagents invoked in order |
+| **M3 — Benchmark & Behavior** | 13 | BENCH-01..05 | openclaw-CLI/minimax-M3 run + A/B + block-and-steer, logged |
+| **M4 — Goal Integration + Deferrals** | 14–15 | GOAL-01, DEF | `/goal` don't-stop loop within GSD; v1.0 deferrals closed |
+
+### GOAL B — milestone `/goal` prompts (paste ONE per session, each ≤4000 chars)
+
+**M1 — Retrieval Core**
 ```
-/goal Build GSD-OC v1.1 to DoD, working the GSD way (open-gsd/gsd-core), research→plan→execute→verify per phase, NEVER stopping until done. DONE only when ALL hold, each demonstrated with evidence (commands+outputs+a real OpenClaw gateway transcript) in this conversation: (1) all 233 GSD docs (88 workflows+33 agents+67 refs+45 templates) indexed as a retrievable corpus bundled as plugin data, runtime never reads ~/.claude; (2) HYBRID retrieval — LanceDB embedded semantic + BM25 lexical + trigram, RRF-fused, no API key/secret; (3) incremental merkle/content-hash manifest; (4) gsd_retrieve tool, 0 Discord slash slots; (5) finite-path orchestrator that retrieval-selects ALL relevant GSD skills+subagents across the FULL lifecycle (not just plan/execute), enforced on autonomous ("go") + ~/codeWS work, explicit opt-out; (6) live proof all 33 subagents reachable+invoked in correct order, no /command, fanned out by Claude-as-orchestrator; (7) benchmark category that invokes the openclaw CLI with the minimax M3 agent actually USING the plugin, reviewing internal tool-usage, proving the agent is blocked/steered when acting wrongly so it (a) never deadlocks and (b) self-corrects, plus A/B (GSD-on vs GSD-off) + output/performance/behavior review with logged metrics; (8) v1.0 deferrals (Discord round-trip, ORCH-04, ENG-03b) closed. Enforce GSD usage: specs written, assumptions resolved + discussions held via AskUserQuestion, research ALWAYS during planning, cross-AI plan review + replanning, context7/web tools used, 33 subagents spawned at opus. Tests green + categorized + logged; GPG-signed, staged by name. No host config/secret mutation; never --no-verify/force-push. Stop+ask via AskUserQuestion at each GSD decision gate. Or stop after 60 turns and report status.
+/goal As the GSD orchestrator/delegator (delegate to gsd-subagents at opus; research-always; cross-AI plan review), build GSD-OC milestone M1 "Retrieval Core" to DoD per open-gsd/gsd-core. DONE only when, shown with commands+outputs in-conversation: (1) all 233 GSD docs bundled + chunked, runtime never reads ~/.claude; (2) a hybrid gsd_retrieve fuses LanceDB embedded semantic + BM25 lexical + trigram via RRF, no API key/secret; (3) an incremental merkle manifest re-indexes only changed docs; (4) gsd_retrieve is registered as an OpenClaw tool consuming 0 Discord slash slots (registerCommand==0; plugins validate green); (5) a free-text intent returns relevant long-tail skills the 6 routers alone miss (e.g. "the build is flaky"→gsd-debug). Tests categorized + green (show command+output), GPG-signed, staged by name; no host/secret mutation; never --no-verify/force-push. Stop+ask via AskUserQuestion at each GSD decision gate. Or stop after 50 turns and report.
+```
+
+**M2 — Finite-Path + Enforcement**
+```
+/goal As the GSD orchestrator/delegator (fan out the 33 subagents at opus; research-always; cross-AI review), build GSD-OC milestone M2 "Finite-Path + Enforcement" to DoD per open-gsd/gsd-core. DONE only when, evidenced in a REAL OpenClaw gateway transcript: (1) a finite-path orchestrator retrieval-selects (via gsd_retrieve) the relevant GSD skills+subagents across the FULL lifecycle per project intent, not a static table; (2) it is enforced on autonomous + ~/codeWS work with an explicit opt-out; chat/quick one-offs stay off-path; (3) GSD-usage enforcement holds: no phase proceeds without a written spec + resolved assumptions + an AskUserQuestion discussion; research always runs in planning; plans pass cross-AI review/replanning until no HIGH concerns; (4) all 33 subagents are reachable + invoked in the correct lifecycle order with NO /command, fanned out at opus by Claude-as-orchestrator. Tests categorized + green, GPG-signed, staged by name; no host/secret mutation; never --no-verify/force-push. AskUserQuestion at each gate. Or stop after 50 turns and report.
+```
+
+**M3 — Benchmark & Behavior**
+```
+/goal As the GSD orchestrator/delegator, build GSD-OC milestone M3 "Benchmark & Behavior" to DoD per open-gsd/gsd-core. DONE only when, with logged evidence in-conversation: (1) distinct test categories exist (unit / integration / live-gateway / benchmark); (2) a benchmark invokes the OpenClaw CLI driving the minimax M3 agent ACTUALLY using the plugin on real tasks; (3) internal tool usage is reviewed (which tools fired, in what order); (4) the run proves the agent is blocked or steered/corrected on disallowed actions so it NEVER deadlocks and self-corrects; (5) an A/B compares GSD-on vs GSD-off over the same tasks; (6) an output/performance/behavior report with logged metrics (recall, coverage, tool-usage, outcome) is written under .planning/. Tests green (show command+output), GPG-signed, staged by name; no host/secret mutation; never --no-verify/force-push. AskUserQuestion at each gate. Or stop after 50 turns and report.
+```
+
+**M4 — Goal Integration + Deferral Closure**
+```
+/goal As the GSD orchestrator/delegator, build GSD-OC milestone M4 "Goal Integration + Deferrals" to DoD per open-gsd/gsd-core. DONE only when, evidenced in a real session: (1) the plugin lifecycle integrates with the OpenClaw /goal (don't-stop-until-done) pipeline, exposing an evaluator-readable completion signal so an agent keeps working within GSD until the project DoD holds; (2) the no-deadlock + opt-out guarantees hold under the don't-stop loop; (3) the v1.0 deferrals are closed or documented as platform-blocked with a fallback proven: live Discord component round-trip (buttons/select/poll), ORCH-04 cross-turn auto-advance, ENG-03(b) per-session toggle read-back. Tests green, GPG-signed, staged by name; no host/secret mutation; never --no-verify/force-push. AskUserQuestion at each gate. Or stop after 50 turns and report.
 ```
 
 ### GOAL C — the standing META-goal (HOW we work; applies to all GSD-OC work)
