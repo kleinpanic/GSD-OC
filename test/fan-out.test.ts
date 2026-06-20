@@ -73,3 +73,25 @@ test("fanOutSubagents: a failed lane does not throw; aggregate still has N entri
   assert.equal(res[0].status, "ok");
   assert.equal(res[2].status, "ok");
 });
+
+// ── MT-05: run() THROWING on one lane exercises the per-lane catch (not just a wait error) ──
+
+test("MT-05: a thrown run() on one lane is caught; other lanes ok, keys all distinct", async () => {
+  const { api, runKeys } = mockApi();
+  // Make run() THROW only for lane index 1 (its sessionKey ends with lane-1).
+  const baseRun = api.runtime.subagent.run;
+  api.runtime.subagent.run = async (p) => {
+    if (p.sessionKey.endsWith("lane-1")) throw new Error("run blew up on lane 1");
+    return baseRun(p);
+  };
+  const res = await fanOutSubagents(api, "gsd-project-researcher", ["m0", "m1", "m2"]);
+  assert.equal(res.length, 3);
+  assert.equal(res[1].status, "error");
+  assert.match(res[1].error ?? "", /run blew up on lane 1/);
+  assert.equal(res[0].status, "ok");
+  assert.equal(res[2].status, "ok");
+  const keys = res.map((r) => r.sessionKey);
+  assert.equal(new Set(keys).size, 3, "all 3 lane sessionKeys distinct even when one throws");
+  // run() was reached for the two non-throwing lanes (the throwing lane never pushes).
+  assert.ok(!runKeys.some((k) => k.endsWith("lane-1")));
+});

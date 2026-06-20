@@ -1,6 +1,6 @@
 import { isCodingWorkspace } from "../hooks/auto-engage.js";
 import { optedOut } from "./opt-out.js";
-import { gsdAgentsSection } from "./agents-md.js";
+import { mergeGsdSection } from "./agents-md.js";
 
 /**
  * R0.5 auto-engage — the CANONICAL, robust delivery (supersedes the dead `before_prompt_build`
@@ -61,16 +61,17 @@ export function decideBootstrapInjection(ctx: AgentBootstrapContext): {
   if (optedOut({ cwd: ctx.workspaceDir, pluginConfig: pluginConfigFrom(ctx) })) return null;
 
   const idx = ctx.bootstrapFiles.findIndex(isAgentsFile);
-  const section = gsdAgentsSection();
   if (idx === -1) {
-    // No AGENTS entry present — synthesize one so the GSD policy still leads.
-    return { index: -1, content: `# AGENTS.md\n\n${section}\n` };
+    // No AGENTS entry present — synthesize one. mergeGsdSection(null) yields the canonical
+    // `# AGENTS.md\n\n<block>\n` shape (WR-03: single source of truth for merge logic).
+    return { index: -1, content: mergeGsdSection(null) };
   }
   const existing = ctx.bootstrapFiles[idx].content ?? "";
   if (alreadyInjected(existing)) return null; // idempotent — don't double-inject
-  // Lead the seeded AGENTS content with the GSD policy block.
-  const merged = existing.trim() === "" ? `${section}\n` : `${section}\n\n${existing}`;
-  return { index: idx, content: merged };
+  // WR-03: reuse the canonical mergeGsdSection — it inserts the GSD block AFTER a leading
+  // `# AGENTS.md` title (instead of clobbering the title to second place) and handles the
+  // corrupt/refresh cases, eliminating this module's duplicate prepend logic.
+  return { index: idx, content: mergeGsdSection(existing) };
 }
 
 /**

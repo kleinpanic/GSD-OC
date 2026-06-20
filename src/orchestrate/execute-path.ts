@@ -64,7 +64,7 @@ export interface ExecuteResult {
   completed: boolean;
   /** verb of the step we stopped at (gate or failure), or null if completed */
   haltedAt: string | null;
-  reason: "completed" | "gate" | "failure";
+  reason: "completed" | "gate" | "failure" | "empty";
 }
 
 export interface ExecutePathOptions {
@@ -77,6 +77,9 @@ export async function executePath(
   dispatch: StepDispatcher,
   opts: ExecutePathOptions = {},
 ): Promise<ExecuteResult> {
+  // WR-03: an empty path ran NOTHING — distinguish it from a path that ran fully. Without this an
+  // empty path falls through the loop to a vacuous completed:true, hiding "selectPath found no work".
+  if (path.length === 0) return { steps: [], completed: false, haltedAt: null, reason: "empty" };
   const steps: ExecutedStep[] = [];
   for (const step of path) {
     // Decision gate: by default HALT so the discussion/approval happens (ENF-01); autoGates runs through.

@@ -35,3 +35,20 @@ test("trigramSearch ranking is deterministic with chunkId tie-break", () => {
   const hits = trigramSearch(idx, "alpha", 5);
   assert.deepEqual(hits.map((h) => h.chunkId), ["a#0", "z#0"]);
 });
+
+test("trigrams of a single char is the padded gram; empty string yields none", () => {
+  assert.deepEqual([...trigrams("x")], [" x "]);
+  assert.equal(trigrams("").size, 0);
+});
+
+test("empty query searches to []", () => {
+  const idx = buildTrigram([chunk("a#0", "alpha")]);
+  assert.deepEqual(trigramSearch(idx, "", 5), []);
+});
+
+test("self-similarity is Dice 1.0", () => {
+  const idx = buildTrigram([chunk("a#0", "flaky")]);
+  const hits = trigramSearch(idx, "flaky", 5);
+  assert.equal(hits[0].chunkId, "a#0");
+  assert.ok(Math.abs(hits[0].score - 1.0) < 1e-12);
+});

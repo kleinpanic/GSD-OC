@@ -22,11 +22,15 @@ export const DENY: { dirs: Set<string>; globs: RegExp[] } = {
     ".gnupg",
     ".aws",
     ".netrc",
-    ".Xauthority",
+    ".xauthority",
     ".git",
     ".env",
     "id_rsa",
+    "id_dsa",
+    "id_ecdsa",
     "id_ed25519",
+    "authorized_keys",
+    "known_hosts",
     ".bash_history",
     ".zsh_history",
     "credentials",
@@ -37,8 +41,9 @@ export const DENY: { dirs: Set<string>; globs: RegExp[] } = {
 };
 
 export function isDenied(name: string): boolean {
-  if (DENY.dirs.has(name)) return true;
-  return DENY.globs.some((re) => re.test(name));
+  const lower = name.toLowerCase();
+  if (DENY.dirs.has(lower)) return true;
+  return DENY.globs.some((re) => re.test(lower));
 }
 
 interface Candidate {

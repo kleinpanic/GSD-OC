@@ -1,8 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { makeSpyApi, auditSlots } from "../src/routing/slot-audit.js";
+import { makeSpyApi, auditSlots, assertZeroSlots } from "../src/routing/slot-audit.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const manifest = join(here, "..", "..", "openclaw.plugin.json");
@@ -27,6 +29,41 @@ test("combined verdict: globalSlashCommands(gsd-oc) === 0 <= 100 (RTE-03 success
   const globalSlashCommands = audit.registerCommandCalls + audit.manifestCommandCount;
   assert.equal(globalSlashCommands, 0);
   assert.ok(globalSlashCommands <= 100);
+});
+
+// ── WR-01 (MT-01): assertZeroSlots enforces the invariant auditSlots only reports ──
+
+test("MT-01: auditSlots counts a synthetic manifest's commands; assertZeroSlots throws on >0", () => {
+  const dir = fs.mkdtempSync(join(os.tmpdir(), "slot-audit-"));
+  const synthetic = join(dir, "openclaw.plugin.json");
+  fs.writeFileSync(
+    synthetic,
+    JSON.stringify({
+      contracts: { tools: ["a", "b", "c", "d", "e", "f", "g"] },
+      commands: [{ name: "x" }, { name: "y" }],
+    }),
+  );
+  try {
+    const audit = auditSlots(synthetic);
+    assert.equal(audit.manifestCommandCount, 2, "two synthetic commands counted");
+    assert.equal(audit.manifestToolCount, 7);
+    assert.throws(
+      () => assertZeroSlots(audit),
+      /0-slot invariant violated/,
+      "a manifest with commands[] must fail the invariant",
+    );
+    // A clean audit (no commands, no registerCommand calls) must NOT throw.
+    assert.doesNotThrow(() =>
+      assertZeroSlots({
+        registerToolCalls: 7,
+        registerCommandCalls: 0,
+        manifestCommandCount: 0,
+        manifestToolCount: 7,
+      }),
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("makeSpyApi counts each registration kind independently", () => {

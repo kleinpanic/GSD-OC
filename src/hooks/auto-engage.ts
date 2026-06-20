@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { classifyIntent } from "../engage/classify.js";
 import { optedOut } from "../engage/opt-out.js";
 
@@ -27,11 +27,20 @@ function codingWorkspaceRoots(extra: string[] = []): string[] {
 /** Filesystem markers that identify any directory as a real coding project (root-agnostic). */
 const CODING_MARKERS = [".git", "package.json", ".planning", "pyproject.toml", "Cargo.toml", "go.mod", "tsconfig.json"];
 
-/** True if `dir` itself looks like a coding project (has a marker). Path-independent — this is what makes
- *  auto-engage fire in agent workspaces (~/.openclaw/workspace-*) that are not under ~/codeWS. */
+/** True if `dir` (or any ANCESTOR up to the filesystem root) carries a coding-project marker.
+ *  Path-independent — this is what makes auto-engage fire in agent workspaces
+ *  (~/.openclaw/workspace-*) not under ~/codeWS. WR-01: a SUBDIR of a coding project (src/,
+ *  packages/foo) must engage too, so we walk UP from `dir` to root (bounded — breaks when the
+ *  parent stops changing, i.e. at the root). */
 function hasCodingMarker(dir: string): boolean {
   try {
-    return CODING_MARKERS.some((m) => existsSync(join(dir, m)));
+    let cur = resolve(dir);
+    for (;;) {
+      if (CODING_MARKERS.some((m) => existsSync(join(cur, m)))) return true;
+      const parent = dirname(cur);
+      if (parent === cur) return false; // reached filesystem root
+      cur = parent;
+    }
   } catch {
     return false;
   }

@@ -19,6 +19,11 @@ test("RRF tolerates empty lists (no crash, contribute nothing)", () => {
   assert.equal(fused.length, 2);
 });
 
+test("RRF over no lists / only-empty lists yields []", () => {
+  assert.deepEqual(rrf([]), []);
+  assert.deepEqual(rrf([[], []]), []);
+});
+
 test("RRF uses k=60 default and 1-based rank", () => {
   const fused = rrf([list("a")]);
   assert.ok(Math.abs(fused[0].score - 1 / 61) < 1e-12);

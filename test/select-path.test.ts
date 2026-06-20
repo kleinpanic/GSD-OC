@@ -53,3 +53,63 @@ test("PATH-complexity: a QUICK intent gets the minimal path, not the full lifecy
   const fix = selectPath({ intent: "fix the flaky test", retrieved: [] });
   assert.ok(has(fix, "debug"), "quick bugfix still routes through debug");
 });
+
+test("CR-02: a QUICK intent NEVER carries a decision gate, even when a gated conditional fires", () => {
+  // "rename" → quick; "ui"/"button" matches the ui conditional, which is gate:true on the full
+  // backbone. On a quick path that gate MUST be stripped so a driven gsd-quick run never halts.
+  const p = selectPath({ intent: "rename the ui button layout", retrieved: [] });
+  assert.ok(has(p, "ui"), "ui conditional still inserted on quick path");
+  // sanity: the same conditional carries a gate on the full (non-quick) backbone
+  const full = selectPath({ intent: "build a ui button layout", retrieved: [] });
+  assert.ok(full.find((s) => s.verb === "ui")!.gate, "ui gate present on the full backbone");
+  // …but is stripped on the quick path → the whole quick path is gate-free
+  assert.ok(p.every((s) => !s.gate), "no step on the quick path may halt the driven run");
+});
+
+test("WR-01: an empty or whitespace-only intent yields an empty path (no work to drive)", () => {
+  assert.deepEqual(selectPath({ intent: "", retrieved: [] }), []);
+  assert.deepEqual(selectPath({ intent: "   ", retrieved: [] }), []);
+});
+
+test("PATH-01: a keyword+consensus conditional inserts the stage EXACTLY ONCE (no double-insert)", () => {
+  // "debug the crash" matches the debug keyword, AND two workflow:debug docs satisfy consensus.
+  // Both signals true must not push the debug stage twice.
+  const p = selectPath({
+    intent: "debug the crash",
+    retrieved: [{ docId: "workflow:debug-1" }, { docId: "workflow:debug-2" }],
+  });
+  assert.equal(p.filter((s) => s.verb === "debug").length, 1, "debug inserted once despite keyword+consensus");
+});
+
+test("PATH-01: retrieval consensus is case-insensitive (docIds lowercased before matching)", () => {
+  // No debug keyword in "build a thing"; debug must enter via case-insensitive workflow:debug consensus.
+  const p = selectPath({
+    intent: "build a thing",
+    retrieved: [{ docId: "WORKFLOW:DEBUG-1" }, { docId: "WORKFLOW:DEBUG-2" }],
+  });
+  assert.ok(has(p, "debug"), "uppercase workflow:DEBUG docs still satisfy consensus");
+});
+
+test("WR-04: pos-collision ordering is deterministic — research before ui, stable across calls", () => {
+  for (let i = 0; i < 3; i++) {
+    const p = selectPath({ intent: "build a react dashboard", retrieved: [] });
+    assert.ok(has(p, "ui"), "ui present");
+    assert.ok(idx(p, "research") < idx(p, "ui"), "research (pos30) before ui (pos30) by verb tiebreaker");
+  }
+});
+
+test("PATH-01 invariant: verify always precedes ship; output ordered non-decreasing by pos", () => {
+  for (const intent of ["build a feature", "refactor the auth module", "build a secure react ai dashboard with a flaky bug"]) {
+    const p = selectPath({ intent, retrieved: [] });
+    if (has(p, "verify") && has(p, "ship")) {
+      assert.ok(idx(p, "verify") < idx(p, "ship"), `verify before ship for "${intent}"`);
+    }
+    // Output must be ordered non-decreasing by pos (lifecycle order). Re-derive pos from the backbone
+    // ordering: a stage's index in the canonical lifecycle must never decrease across the path.
+    const order = ["spike", "discuss", "map-codebase", "research", "ui", "ai-integration", "plan", "debug", "execute", "secure", "code-review", "verify", "graphify", "docs", "ship"];
+    const positions = p.map((s) => order.indexOf(s.verb));
+    for (let i = 1; i < positions.length; i++) {
+      assert.ok(positions[i] > positions[i - 1], `lifecycle order strictly increasing for "${intent}" at ${p[i].verb}`);
+    }
+  }
+});

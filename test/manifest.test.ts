@@ -36,6 +36,14 @@ test("buildManifest sorts leaves and stamps a stable root", () => {
   assert.equal(m.merkleRoot, merkleRoot([sha256("one"), sha256("two")]));
 });
 
+test("diffManifest of a manifest against itself has empty added/removed/changed", () => {
+  const m = buildManifest([mkDoc("a", "1"), mkDoc("b", "2")], [], ["/r"]);
+  const diff = diffManifest(m, m);
+  assert.deepEqual(diff.added, []);
+  assert.deepEqual(diff.removed, []);
+  assert.deepEqual(diff.changed, []);
+});
+
 test("diffManifest classifies added / removed / changed / unchanged (RET-06 incremental)", () => {
   const prev = buildManifest([mkDoc("a", "1"), mkDoc("b", "2"), mkDoc("c", "3")], [], ["/r"]);
   const next = buildManifest([mkDoc("a", "1"), mkDoc("b", "CHANGED"), mkDoc("d", "4")], [], ["/r"]);

@@ -44,6 +44,53 @@ test("executePath surfaces a gate the dispatcher signals mid-run", async () => {
   assert.equal(r.reason, "gate");
 });
 
+test("WR-03: an empty path is NOT a vacuous success — reason 'empty', completed false", async () => {
+  const r = await executePath([], ok);
+  assert.equal(r.completed, false);
+  assert.equal(r.reason, "empty");
+  assert.equal(r.haltedAt, null);
+  assert.equal(r.steps.length, 0);
+});
+
+test("executePath: a gate at index 0 halts immediately (one gated step recorded)", async () => {
+  const path = [{ verb: "discuss", skill: "gsd-discuss-phase", reason: "gate", gate: true }];
+  const r = await executePath(path, ok);
+  assert.equal(r.completed, false);
+  assert.equal(r.reason, "gate");
+  assert.equal(r.haltedAt, "discuss");
+  assert.equal(r.steps.length, 1);
+  assert.equal(r.steps[0].status, "gated");
+});
+
+test("executePath: two gates → halts at the FIRST", async () => {
+  const path = [
+    { verb: "discuss", skill: "gsd-discuss-phase", reason: "gate", gate: true },
+    { verb: "plan", skill: "gsd-plan-phase", reason: "gate", gate: true },
+  ];
+  const r = await executePath(path, ok);
+  assert.equal(r.haltedAt, "discuss");
+  assert.equal(r.steps.length, 1);
+});
+
+test("executePath: a dispatcher-signalled gate (gated:true) yields reason 'gate'", async () => {
+  const path = [{ verb: "execute", skill: "gsd-quick", reason: "core", gate: false }];
+  const gatedDispatch = async (): Promise<StepOutcome> => ({ ok: true, gated: true });
+  const r = await executePath(path, gatedDispatch, { autoGates: true });
+  assert.equal(r.reason, "gate");
+  assert.equal(r.haltedAt, "execute");
+});
+
+test("executePath: a THROWING dispatcher becomes a failure carrying the error message", async () => {
+  const path = selectPath({ intent: "build a feature", retrieved: [] });
+  const dispatch = async (): Promise<StepOutcome> => {
+    throw new Error("network down");
+  };
+  const r = await executePath(path, dispatch, { autoGates: true });
+  assert.equal(r.completed, false);
+  assert.equal(r.reason, "failure");
+  assert.equal(r.steps.at(-1)!.output, "network down");
+});
+
 // ── state-machine completion (codex F2) ──
 
 test("route: last phase verified (passing VERIFICATION.md) → complete-milestone reachable", () => {

@@ -19,6 +19,20 @@ test("normalizeInto produces a unit vector", () => {
   assert.ok(Math.abs(n[0] - 0.6) < 1e-6 && Math.abs(n[1] - 0.8) < 1e-6);
 });
 
+test("normalizeInto of the zero vector stays zero (no NaN)", () => {
+  assert.deepEqual([...normalizeInto([0, 0, 0])], [0, 0, 0]);
+});
+
+test("normalizeInto throws on a non-finite component", () => {
+  assert.throws(() => normalizeInto([1, NaN, 0]), /non-finite vector component/);
+  assert.throws(() => normalizeInto([Infinity, 0]), /non-finite vector component/);
+});
+
+test("CosineBackend negative topK returns [] (not all-but-last)", async () => {
+  const cache: VectorCache = { dim: 2, chunkIds: ["a", "b"], matrix: Float32Array.from([1, 0, 0, 1]) };
+  assert.deepEqual(await new CosineBackend(cache).search([1, 0], -1), []);
+});
+
 test("CosineBackend ranks the nearest row first", async () => {
   const cache: VectorCache = { dim: 2, chunkIds: ["a", "b", "c"], matrix: Float32Array.from([1, 0, 0, 1, 0.7071, 0.7071]) };
   const hits = await new CosineBackend(cache).search([1, 0], 3);

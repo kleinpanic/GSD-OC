@@ -28,6 +28,15 @@ test("DoD item 5: a semantic signal bridges 'the build is flaky' -> a debug doc 
   );
 });
 
+test("a ~5MB intent is clamped and returns promptly (no event-loop hang)", async () => {
+  const huge = "the build is flaky ".repeat(280_000); // ~5MB
+  const t0 = Date.now();
+  const res = await retrieve(huge, { semantic: null, topK: 5 });
+  const elapsed = Date.now() - t0;
+  assert.ok(res.length > 0, "clamped query still retrieves");
+  assert.ok(elapsed < 2000, `retrieve took ${elapsed}ms — clamp not applied?`);
+});
+
 test("baseline: lexical alone does NOT surface a debug doc (proves semantic is load-bearing)", () => {
   const corpus = loadCorpus();
   const top = bm25Search(buildBm25(corpus.chunks), "the build is flaky", 20);

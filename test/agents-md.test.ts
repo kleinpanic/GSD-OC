@@ -54,6 +54,31 @@ test("mergeGsdSection is idempotent — re-merge refreshes the block in place, n
   assert.ok(twice.includes("## House rules"));
 });
 
+test("corrupt block (begin, no end) rewrites to exactly ONE managed block (CR-02)", () => {
+  const beginRe = new RegExp(GSD_BEGIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
+  // A truncated managed region: GSD_BEGIN present, GSD_END missing.
+  const corrupt = `# AGENTS.md\n\n${GSD_BEGIN}\n## GSD — partial\nmore lines but no end marker\n`;
+  const out = mergeGsdSection(corrupt);
+  assert.equal((out.match(beginRe) || []).length, 1, "exactly one gsd-oc:begin after repair");
+  assert.ok(out.includes(GSD_END), "repaired block now has an end marker");
+  // Idempotency must hold: a second merge sees a well-formed pair and refreshes in place.
+  const twice = mergeGsdSection(out);
+  assert.equal((twice.match(beginRe) || []).length, 1, "still exactly one block after re-merge");
+});
+
+test("mergeGsdSection idempotency: merge(merge(x)) === merge(x)", () => {
+  const x = "# AGENTS.md\n\n## House rules\n- be terse\n";
+  const once = mergeGsdSection(x);
+  const twice = mergeGsdSection(once);
+  assert.equal(twice, once, "re-merging an already-merged file is a fixed point");
+});
+
+test("existing '# AGENTS.md' title → GSD block inserted AFTER the title", () => {
+  const out = mergeGsdSection("# AGENTS.md\n\n## House\n");
+  assert.ok(out.startsWith("# AGENTS.md"), "title remains first");
+  assert.ok(out.indexOf(GSD_BEGIN) > out.indexOf("# AGENTS.md"), "GSD block sits after the title");
+});
+
 test("applyGsdAgentsMd writes the file and is idempotent on disk", async () => {
   const dir = mkdtempSync(join(tmpdir(), "gsd-agentsmd-"));
   try {

@@ -44,7 +44,13 @@ function parseRoadmapPhases(planningDir: string): RoadmapPhase[] {
   return phases;
 }
 
-/** Minimal STATE.md status reader (frontmatter or `## Current Position` body). */
+/**
+ * Minimal STATE.md status reader. Mirrors read-state.ts precedence (WR-01): the
+ * frontmatter `status:` scalar is the baseline, but a `Status:` field inside the
+ * `## Current Position` body section overrides it when present — so a human-set body
+ * `error`/`failed` halts. Quotes are stripped on both branches (WR-02): `Status: "failed"`
+ * is detected as a halt.
+ */
 function readStatus(planningDir: string): string | null {
   let raw: string;
   try {
@@ -52,13 +58,23 @@ function readStatus(planningDir: string): string | null {
   } catch {
     return null;
   }
+  const stripQuotes = (s: string) => s.trim().replace(/^['"]|['"]$/g, "");
+  let status: string | null = null;
   const fm = /^---\n([\s\S]*?)\n---/.exec(raw);
   if (fm) {
     const s = /^status:[ \t]*(.+)$/im.exec(fm[1]);
-    if (s) return s[1].trim().replace(/^['"]|['"]$/g, "");
+    if (s) status = stripQuotes(s[1]);
   }
-  const body = /^Status:[ \t]*(.+)$/im.exec(raw);
-  return body ? body[1].trim() : null;
+  // Body `## Current Position` Status overrides frontmatter (read-state.ts:73-90).
+  const section = /##\s*Current Position\s*\n([\s\S]*?)(?=\n##|$)/i.exec(raw);
+  if (section) {
+    const body = section[1];
+    const bold = /\*\*Status:\*\*[ \t]*(.+)/i.exec(body);
+    const plain = /^Status:[ \t]*(.+)$/im.exec(body);
+    const bodyStatus = bold ? bold[1] : plain ? plain[1] : null;
+    if (bodyStatus) status = stripQuotes(bodyStatus);
+  }
+  return status;
 }
 
 /** STATE.md `paused_at: <non-empty>` presence (Route 8). */
@@ -77,7 +93,13 @@ function phaseDirFor(planningDir: string, phaseNum: string): string | null {
   const phasesDir = path.join(planningDir, "phases");
   let dirs: string[];
   try {
-    dirs = fs.readdirSync(phasesDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+    // WR-03: sort by comparePhaseNum identically to findPhase, so both helpers resolve the
+    // SAME directory when multiple dirs share a phase token (deterministic single-dir pick).
+    dirs = fs
+      .readdirSync(phasesDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      .sort((a, b) => comparePhaseNum(a, b));
   } catch {
     return null;
   }
@@ -151,7 +173,15 @@ function verificationPassed(planningDir: string, phaseNum: string): boolean {
     } catch {
       continue;
     }
-    if (/^status:[ \t]*"?\s*passed\b/im.test(text) || /\bverdict\b\s*[:=]\s*"?\s*pass(ed)?\b/i.test(text)) return true;
+    // CR-02: anchor the verdict to a line-anchored, delimited field value (mirroring
+    // hasUnresolvedVerificationFail) so prose like "the final verdict = passed by reviewer"
+    // no longer false-positives. Still matches `status: passed`, `Verdict: PASS`, `| PASS |`.
+    if (
+      /^[ \t]*(status|result|verdict|outcome)\b[ \t]*[:=][ \t]*"?\s*pass(ed)?\b/im.test(text) ||
+      /(^|\|)\s*PASS(ED)?\s*(\||$)/im.test(text)
+    ) {
+      return true;
+    }
   }
   return false;
 }
@@ -243,19 +273,15 @@ export function route(planningDir: string): RouteResult {
     // Route 5: all plans have summaries → verify. (Phase complete; continue to next phase
     // only after verification — so Route 5 fires before advancing.)
     if (fp.plans.length > 0 && fp.summaries.length === fp.plans.length) {
-      // If this is NOT the last phase, the phase is complete → advance (Route 6) is handled
-      // by falling through to the next phase iteration. We only return verify-work when this
-      // phase is the last incomplete-forward unit. Per next.md §239 Route 5 fires when the
-      // current phase's plans all have summaries; we surface it here.
-      const isLast = ordered[ordered.length - 1].number === ph.number;
-      if (isLast) {
-        // codex F2: only return verify-work until verification PASSES; once it passes, the last phase is
-        // truly complete → fall through so Route 7 (complete-milestone) becomes reachable.
-        if (verificationPassed(planningDir, ph.number)) break;
+      // CR-01: a complete phase must be verified before the walk advances — for ALL phases,
+      // not just the last. A non-last complete-but-unverified phase previously fell through
+      // (silently skipping verification) and could surface a later phase's discuss/plan route.
+      // Now any complete phase returns verify-work until verification PASSES; only then does
+      // the loop advance. Route 7 (complete-milestone) becomes reachable only once every phase
+      // is verified.
+      if (!verificationPassed(planningDir, ph.number)) {
         return { route: 5, action: "verify-work", phase: ph.number, reason: "all-summaries" };
       }
-      // Not last: this phase is complete; advance to discuss the next phase (Route 6) only
-      // if the next phase has no context yet — otherwise let the loop handle it.
       continue;
     }
   }

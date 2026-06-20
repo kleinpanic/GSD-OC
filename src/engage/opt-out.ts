@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 /**
  * ENG-03 opt-out mechanisms (D-02 / D-03 / D-04).
@@ -8,9 +8,23 @@ import { join } from "node:path";
  * host config (R0.3). All functions here are pure except hasGsdOffMarker, which does fs.existsSync.
  */
 
-/** (a) D-02: a `.gsd-off` file in cwd OR `${cwd}/.planning/.gsd-off` disables engage for the project. */
+/**
+ * (a) D-02: a `.gsd-off` file disables engage for the project. WR-02: opt-out scope must
+ * MATCH activation scope — activation now walks UP from cwd looking for coding markers, so a
+ * `.gsd-off` placed in any ANCESTOR (the project root) must suppress engage for a subdir cwd.
+ * We walk UP from cwd to the filesystem root, checking `${dir}/.gsd-off` and
+ * `${dir}/.planning/.gsd-off` at each level (bounded — breaks at root).
+ */
 export function hasGsdOffMarker(cwd: string): boolean {
-  return existsSync(join(cwd, ".gsd-off")) || existsSync(join(cwd, ".planning", ".gsd-off"));
+  let cur = resolve(cwd);
+  for (;;) {
+    if (existsSync(join(cur, ".gsd-off")) || existsSync(join(cur, ".planning", ".gsd-off"))) {
+      return true;
+    }
+    const parent = dirname(cur);
+    if (parent === cur) return false; // reached filesystem root
+    cur = parent;
+  }
 }
 
 /**
@@ -31,9 +45,14 @@ export function configDisablesEngage(pluginConfig: Record<string, unknown> | und
  */
 export function parseToggle(prompt: string): "off" | "on" | null {
   const text = (prompt ?? "").trim().toLowerCase();
-  if (/\bgsd\b\s*:?\s*off\b|\bdisable\s+gsd\b/.test(text)) return "off";
-  if (/\bgsd\b\s*:?\s*on\b|\benable\s+gsd\b/.test(text)) return "on";
-  return null;
+  // WR-04: anchor to an explicit directive SHAPE at the start of the prompt, not a loose
+  // substring. "is gsd on the roadmap" must NOT toggle (the bare "gsd on" appears mid-sentence,
+  // not as a directive). The directive is `gsd <on|off>` or `<enable|disable> gsd` at the head;
+  // "first match wins" still resolves "gsd off then on" → "off".
+  const m = /^(?:gsd[:\s]+(on|off)|(enable|disable)\s+gsd)\b/.exec(text);
+  if (!m) return null;
+  if (m[1]) return m[1] as "off" | "on";
+  return m[2] === "enable" ? "on" : "off";
 }
 
 /** Composed suppression: opt-out if ANY mechanism applies. */

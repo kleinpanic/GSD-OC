@@ -69,13 +69,23 @@ export type RouteHit = {
   note: string;
 };
 
-/** Lightweight intent → verb match within a namespace (substring/keyword). */
+/** Word-boundary regex for a verb (hyphen matches hyphen-or-space): \bcode[- ]review\b. */
+function verbBoundary(token: string): RegExp {
+  return new RegExp("\\b" + token.replace(/-/g, "[- ]") + "\\b");
+}
+
+/** Lightweight intent → verb match within a namespace (word-boundary keyword). */
 export function routeIntent(def: RouterDef, intent?: string): RouteHit {
   const matched =
     intent && intent.trim()
       ? def.verbs.find((v) => {
+          // WR-02: word-boundary match, not raw substring — "planet" must NOT match "plan",
+          // "threadbare" must NOT match "thread".
           const i = intent.toLowerCase();
-          return i.includes(v) || v.split("-").some((part) => part.length > 3 && i.includes(part));
+          return (
+            verbBoundary(v).test(i) ||
+            v.split("-").some((part) => part.length > 3 && verbBoundary(part).test(i))
+          );
         }) ?? null
       : null;
   return {

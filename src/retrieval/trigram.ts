@@ -42,5 +42,5 @@ export function trigramSearch(index: TrigramIndex, query: string, topK: number):
   }
 
   out.sort((a, b) => (b.score - a.score) || (a.chunkId < b.chunkId ? -1 : a.chunkId > b.chunkId ? 1 : 0));
-  return out.slice(0, topK);
+  return out.slice(0, Math.max(0, topK));
 }

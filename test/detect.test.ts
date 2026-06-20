@@ -90,6 +90,12 @@ test("isDenied unit cases", () => {
   assert.equal(isDenied("gsd-executor.md"), false);
 });
 
+test("isDenied is case-insensitive (no upper-case bypass)", () => {
+  for (const name of [".SSH", "ID_RSA", "server.PEM", ".AWS", "id_dsa", "authorized_keys"]) {
+    assert.equal(isDenied(name), true, `${name} should be denied`);
+  }
+});
+
 test("candidateRoots honors $CODEX_HOME override and dedupes", () => {
   const env = { CODEX_HOME: "/custom/codex" } as NodeJS.ProcessEnv;
   const cands = candidateRoots(env, "/home/u");

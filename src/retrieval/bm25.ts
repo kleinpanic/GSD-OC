@@ -79,5 +79,5 @@ function rankDesc(scores: Map<string, number>, topK: number): ScoredChunk[] {
   const out: ScoredChunk[] = [];
   for (const [chunkId, score] of scores) out.push({ chunkId, score });
   out.sort((a, b) => (b.score - a.score) || (a.chunkId < b.chunkId ? -1 : a.chunkId > b.chunkId ? 1 : 0));
-  return out.slice(0, topK);
+  return out.slice(0, Math.max(0, topK));
 }

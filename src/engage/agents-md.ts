@@ -68,6 +68,12 @@ export function mergeGsdSection(existing: string | null): string {
       const after = existing.slice(end + GSD_END.length);
       return `${before}${section}${after}`;
     }
+    // CR-02: corrupt block — GSD_BEGIN present but GSD_END missing. Treat everything from
+    // begin to EOF as the (truncated) managed region and rewrite it, rather than falling
+    // through to PREPEND which would inject a SECOND block on every run forever. Idempotency
+    // holds: a subsequent run sees a well-formed begin/end pair and refreshes in place.
+    const before = existing.slice(0, begin);
+    return `${before}${section}`;
   }
   // Prepend the section so it leads the file. If the file opens with a `# AGENTS.md` title line,
   // keep that title first and insert the block immediately after it; otherwise put the block at

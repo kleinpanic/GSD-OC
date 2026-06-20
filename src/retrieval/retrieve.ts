@@ -95,15 +95,17 @@ export interface RetrieveOptions {
 }
 
 export async function retrieve(query: string, opts: RetrieveOptions = {}): Promise<RetrieveResult[]> {
+  // Clamp the intent length (SECURITY/DoS): a multi-MB query blocks the event loop in tokenize/trigram.
+  const q = query.length > 8192 ? query.slice(0, 8192) : query;
   // Sanitize caller-supplied bounds (cross-AI F4): clamp to sane integer ranges, no NaN/negatives/huge.
   const topK = Math.max(1, Math.min(Math.trunc(opts.topK ?? 10) || 10, 100));
   const perMod = Math.max(1, Math.min(Math.trunc(opts.perModality ?? 50) || 50, 200));
   const { corpus, bm, tg } = lexical();
-  const lists: ScoredChunk[][] = [bm25Search(bm, query, perMod), trigramSearch(tg, query, perMod)];
+  const lists: ScoredChunk[][] = [bm25Search(bm, q, perMod), trigramSearch(tg, q, perMod)];
   const sem = opts.semantic === undefined ? await defaultSemantic({ env: opts.env }) : opts.semantic;
   if (sem) {
     try {
-      lists.push(await sem(query, perMod));
+      lists.push(await sem(q, perMod));
     } catch {
       /* graceful degradation */
     }
