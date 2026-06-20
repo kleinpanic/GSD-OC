@@ -50,6 +50,17 @@ test("driving a path with autoGates dispatches every mapped subagent in order to
   assert.ok(mappedCount >= 5);
 });
 
+test("executePath converts a THROWING dispatcher into a failed step (review LOW-1)", async () => {
+  const path = selectPath({ intent: "build a feature", retrieved: [] });
+  const dispatch = async () => {
+    throw new Error("network down");
+  };
+  const r = await executePath(path, dispatch, { autoGates: true });
+  assert.equal(r.completed, false);
+  assert.equal(r.reason, "failure");
+  assert.equal(r.steps.at(-1)!.output, "network down");
+});
+
 test("a failed subagent run halts the driven path (enforced failure)", async () => {
   const { api } = mockApi("error");
   const path = selectPath({ intent: "build a feature", retrieved: [] });

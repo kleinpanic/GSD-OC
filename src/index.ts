@@ -60,6 +60,11 @@ const entry = definePluginEntry({
   name: PLUGIN_NAME,
   description: PLUGIN_DESCRIPTION,
   register(api) {
+    // Capture the registration-time api for the orchestrator's live subagent dispatch. The execute()
+    // 5th-arg context is unreliable — some runtime call sites pass `void 0` there — so the closure api
+    // (which carries `runtime.subagent`) is the robust source; the context arg is a fallback.
+    const pluginApi = api as { runtime?: { subagent?: unknown } };
+
     // Service: the gsd-oc lifecycle service (minimal in Phase 1 — start is a no-op).
     api.registerService({
       id: PLUGIN_ID,
@@ -161,9 +166,11 @@ const entry = definePluginEntry({
           relevant_skills: retrieved.slice(0, 8).map((r) => ({ id: r.docId, modality: r.modalities })),
         };
         // PATH-execution: actually DRIVE the path (dispatch subagents, halt at gates) when asked AND the
-        // live subagent runtime is reachable from this tool-execution context; otherwise return the plan.
-        const runtimeApi = (context?.api ?? null) as { runtime?: { subagent?: unknown } } | null;
-        if (args?.drive && runtimeApi?.runtime?.subagent) {
+        // live subagent runtime is reachable. Prefer the closure api (reliable), fall back to the context
+        // arg; otherwise return the plan (graceful — never crash).
+        const ctxApi = (context?.api ?? null) as { runtime?: { subagent?: unknown } } | null;
+        const runtimeApi = pluginApi?.runtime?.subagent ? pluginApi : ctxApi?.runtime?.subagent ? ctxApi : null;
+        if (args?.drive && runtimeApi) {
           const dispatch = makeSubagentDispatcher(runtimeApi as never, intent);
           const run = await executePath(path, dispatch, { autoGates: args?.autoGates === true });
           return {

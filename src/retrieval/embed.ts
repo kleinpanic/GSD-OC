@@ -36,7 +36,12 @@ function sparkBaseUrl(env: NodeJS.ProcessEnv): string | undefined {
   if (env.SPARK_EMBEDDINGS_BASE_URL) return env.SPARK_EMBEDDINGS_BASE_URL.replace(/\/+$/, "");
   const host = env.SPARK_HOST;
   if (!host) return undefined;
-  if (/^https?:\/\//.test(host)) return host.replace(/\/+$/, "");
+  // SPARK_HOST with a scheme: keep as-is but ensure an OpenAI-style version path (…/v1) so the
+  // embeddings POST hits {base}/embeddings, not the bare root (review HIGH-2).
+  if (/^https?:\/\//.test(host)) {
+    const u = host.replace(/\/+$/, "");
+    return /\/v\d+$/.test(u) ? u : `${u}/v1`;
+  }
   const port = env.SPARK_PORT || DEFAULT_PORT;
   return `http://${host}:${port}/v1`;
 }
