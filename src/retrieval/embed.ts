@@ -15,22 +15,46 @@ export type InputType = "query" | "passage";
 const MAX_BATCH = 64;
 const TIMEOUT_MS = 30000;
 
+// The corpus vectors were embedded with this model at 2048-dim — the query MUST use the same model,
+// so it is the default when SPARK_EMBEDDINGS_MODEL is unset. Default port mirrors the spark NIM.
+const DEFAULT_MODEL = "nvidia/llama-nemotron-embed-vl-1b-v2";
+const DEFAULT_PORT = "18091";
+
+/**
+ * Resolve the spark token from any of the env names the host environment may provide. The OpenClaw
+ * gateway exports SPARK_BEARER_TOKEN / SPARK_API_KEY; build/dev shells may use SPARK_BEARER_AUTH.
+ */
+function sparkToken(env: NodeJS.ProcessEnv): string | undefined {
+  return env.SPARK_BEARER_TOKEN || env.SPARK_BEARER_AUTH || env.SPARK_API_KEY;
+}
+
+/**
+ * Resolve the spark base URL. Prefer an explicit SPARK_EMBEDDINGS_BASE_URL; otherwise derive it from
+ * SPARK_HOST (what the gateway actually exports — e.g. "10.0.0.1") + the default NIM port + /v1.
+ */
+function sparkBaseUrl(env: NodeJS.ProcessEnv): string | undefined {
+  if (env.SPARK_EMBEDDINGS_BASE_URL) return env.SPARK_EMBEDDINGS_BASE_URL.replace(/\/+$/, "");
+  const host = env.SPARK_HOST;
+  if (!host) return undefined;
+  if (/^https?:\/\//.test(host)) return host.replace(/\/+$/, "");
+  const port = env.SPARK_PORT || DEFAULT_PORT;
+  return `http://${host}:${port}/v1`;
+}
+
 export function embedAvailable(env: NodeJS.ProcessEnv = process.env): boolean {
-  return Boolean(
-    env.SPARK_EMBEDDINGS_BASE_URL && env.SPARK_EMBEDDINGS_MODEL && (env.SPARK_BEARER_TOKEN || env.SPARK_BEARER_AUTH),
-  );
+  return Boolean(sparkBaseUrl(env) && sparkToken(env));
 }
 
 export function sparkConfig(env: NodeJS.ProcessEnv = process.env): SparkConfig {
-  const baseUrl = env.SPARK_EMBEDDINGS_BASE_URL;
-  const model = env.SPARK_EMBEDDINGS_MODEL;
-  const token = env.SPARK_BEARER_TOKEN || env.SPARK_BEARER_AUTH;
-  if (!baseUrl || !model || !token) {
+  const baseUrl = sparkBaseUrl(env);
+  const token = sparkToken(env);
+  const model = env.SPARK_EMBEDDINGS_MODEL || DEFAULT_MODEL;
+  if (!baseUrl || !token) {
     throw new Error(
-      "spark not configured: set SPARK_EMBEDDINGS_BASE_URL, SPARK_EMBEDDINGS_MODEL, and SPARK_BEARER_TOKEN",
+      "spark not configured: set SPARK_EMBEDDINGS_BASE_URL (or SPARK_HOST) and SPARK_BEARER_TOKEN (or SPARK_API_KEY)",
     );
   }
-  return { baseUrl: baseUrl.replace(/\/+$/, ""), model, token };
+  return { baseUrl, model, token };
 }
 
 export interface EmbedOptions {
