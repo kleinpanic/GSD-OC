@@ -5,6 +5,39 @@
  * this is unit-testable with a mock and wires to the live runSubagent in the OpenClaw agent context.
  */
 import type { PathStep } from "./select-path.js";
+import { runSubagent, type RunSubagentApi } from "../dispatch/run-subagent.js";
+
+/**
+ * Maps a path verb to the GSD subagent that executes it. Verbs without a subagent (interactive gates
+ * like discuss/ship, or skill-only steps like spike/graphify) are absent → driven as a no-op success
+ * so the path advances (the gate handling in executePath governs whether they halt).
+ */
+export const VERB_TO_SUBAGENT: Record<string, string> = {
+  "map-codebase": "gsd-codebase-mapper",
+  plan: "gsd-planner",
+  execute: "gsd-executor",
+  "code-review": "gsd-code-reviewer",
+  verify: "gsd-verifier",
+  debug: "gsd-debugger",
+  secure: "gsd-security-auditor",
+  ui: "gsd-ui-researcher",
+  "ai-integration": "gsd-eval-planner",
+};
+
+/**
+ * A StepDispatcher that drives each step via the live OpenClaw subagent runtime. Steps with a mapped
+ * subagent are dispatched (runSubagent); unmapped steps succeed as no-ops so the path advances. The
+ * subagent's run status becomes the step outcome (ok/failure).
+ */
+export function makeSubagentDispatcher(api: RunSubagentApi, intent: string): StepDispatcher {
+  return async (step: PathStep): Promise<StepOutcome> => {
+    const agentId = VERB_TO_SUBAGENT[step.verb];
+    if (!agentId) return { ok: true, output: `${step.verb}: no subagent (skill/gate step)` };
+    const msg = `GSD ${step.verb} step for intent: ${intent}. ${step.reason}`;
+    const res = await runSubagent(api, agentId, msg);
+    return { ok: res.status === "ok", output: res.text || res.status };
+  };
+}
 
 export interface StepOutcome {
   ok: boolean;
