@@ -18,7 +18,12 @@ test("auto-engage fires inside ~/codeWS (ENG-02)", () => {
 
 test("auto-engage does NOT fire outside coding workspaces (ENG-04 negative)", () => {
   assert.equal(autoEngageHandler(evt, { workspaceDir: "/tmp/random" }), undefined);
-  assert.equal(autoEngageHandler(evt, {}), undefined);
+});
+
+test("auto-engage: missing workspaceDir falls back to process.cwd() (cross-AI F5 fix)", () => {
+  // The suite runs inside ~/codeWS, so an absent workspaceDir resolves to a coding workspace and fires.
+  // A missing ctx must NOT silently block activation when the real cwd is a coding workspace.
+  assert.ok(autoEngageHandler(evt, {}), "no workspaceDir → process.cwd() (in codeWS here) → fires");
 });
 
 test("Phase-1 backward-compat: 'do work' still classifies as engage (D-06)", () => {

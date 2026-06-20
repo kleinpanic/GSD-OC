@@ -10,6 +10,7 @@ import { buildWiredRouterTools } from "./routers/route-wire.js";
 import { registerInternalHook, isAgentBootstrapEvent } from "openclaw/plugin-sdk/hook-runtime";
 import { gsdBootstrapHandler, type AgentBootstrapEvent } from "./engage/bootstrap-inject.js";
 import { retrieve } from "./retrieval/retrieve.js";
+import { embedAvailable } from "./retrieval/embed.js";
 
 const PLUGIN_ID = "gsd-oc";
 const PLUGIN_NAME = "GSD-OC";
@@ -150,9 +151,14 @@ const entry = definePluginEntry({
       // param (verified against the bundled file-transfer tool + SDK runner). Reading args, NOT the callId.
       async execute(_toolCallId: string, args: { intent?: string; topK?: number }, _signal?: unknown) {
         const intent = (args?.intent ?? "").trim();
-        if (!intent) return { intent: "", results: [] };
+        const semantic = embedAvailable(process.env); // false → lexical+trigram only (degraded)
+        if (!intent) return { intent: "", semantic, results: [] };
         const docs = await retrieve(intent, { topK: args?.topK ?? 8 });
-        return { intent, results: docs.map((r) => ({ id: r.docId, kind: r.kind, title: r.title, score: r.score })) };
+        return {
+          intent,
+          semantic,
+          results: docs.map((r) => ({ id: r.docId, kind: r.kind, title: r.title, score: r.score, modality: r.modalities })),
+        };
       },
     } as never);
 
