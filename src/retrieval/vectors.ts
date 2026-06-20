@@ -92,9 +92,14 @@ function retrievalDir(): string {
   throw new Error("vectors: could not locate repo root from " + import.meta.url);
 }
 
-export function vectorArtifactPaths(): { bin: string; index: string; lance: string } {
+export function vectorArtifactPaths(): { bin: string; index: string; lance: string; manifest: string } {
   const d = retrievalDir();
-  return { bin: join(d, "vectors.generated.bin"), index: join(d, "vectors.index.json"), lance: join(d, "lancedb") };
+  return {
+    bin: join(d, "vectors.generated.bin"),
+    index: join(d, "vectors.index.json"),
+    lance: join(d, "lancedb"),
+    manifest: join(d, "vectors.manifest.json"),
+  };
 }
 
 /** Load the normalized vector matrix from the build artifact, or null if not built yet. */
