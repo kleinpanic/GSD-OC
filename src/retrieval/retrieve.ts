@@ -50,11 +50,12 @@ export async function defaultSemantic(opts: EmbedOptions = {}): Promise<Semantic
 /**
  * Semantic is the precision modality for free-text intent — a strong semantic match (e.g. "flaky build"
  * → gsd-debugger, ranked #1-2 raw) must not be diluted by equal-weight RRF, which rewards cross-modality
- * consensus and buries single-modality strength. Weighting semantic ×3 surfaces the long-tail skill (DoD
- * item 5) while lexical/trigram still contribute (RET-05). Tuned empirically against the acceptance query
- * + controls; the research left weights as the open knob.
+ * consensus and buries single-modality strength. Weighting semantic ×2 surfaces the long-tail skill (DoD
+ * item 5) while lexical/trigram still contribute (RET-05). Tuned via the BENCH-01 weight sweep: ×2 maximizes
+ * MRR (0.604) + long-tail recall@10 (91%) while keeping flaky→debug in topK; ×3 had equal recall but lower
+ * MRR, ×1 dropped flaky→debug out of topK entirely. See .planning/BENCHMARK.md.
  */
-const SEMANTIC_WEIGHT = 3;
+const SEMANTIC_WEIGHT = 2;
 
 export interface RetrieveOptions {
   topK?: number;
