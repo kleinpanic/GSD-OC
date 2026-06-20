@@ -11,7 +11,7 @@
  *    halt. A greenfield project (no .planning) or a project past planning (execute/verify/ship) is allowed.
  *  - Opt-out: `.gsd-off` / pluginConfig, or `workflow.enforce_tool_gate: false` in .planning/config.json.
  */
-import { existsSync } from "node:fs";
+import { statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { route } from "../engine/route.js";
 import { optedOut } from "../engage/opt-out.js";
@@ -32,32 +32,53 @@ const PRE_BUILD_ACTIONS = new Set(["discuss-phase", "plan-phase"]);
 /** Param keys that may hold the target file path of a mutation tool. */
 const PATH_KEYS = ["file_path", "path", "file", "filePath", "target_file", "filename"];
 
-/** Extract the target file path from a before_tool_call event (derivedPaths first, then params). */
+/** Extract the target file path from a before_tool_call event (host-derived path first, then params).
+ *  Guards every candidate to a non-empty STRING — a non-string derivedPaths[0] or an array-valued param
+ *  must not reach path.resolve (which throws), nor silently mis-scope (CR-3, MED-3). */
 export function targetPathOf(event: BeforeToolCallEvent): string | undefined {
-  if (event.derivedPaths && event.derivedPaths.length) return event.derivedPaths[0];
+  const d = event.derivedPaths;
+  if (d && d.length && typeof d[0] === "string" && d[0]) return d[0];
   const p = event.params ?? {};
-  for (const k of PATH_KEYS) if (typeof p[k] === "string") return p[k] as string;
+  for (const k of PATH_KEYS) {
+    const v = p[k];
+    if (typeof v === "string" && v) return v;
+  }
   return undefined;
 }
 
 /**
- * Walk up from `startDir` to find the GSD project root — the nearest ancestor containing `.planning`.
- * This is how enforcement scopes itself to the actual project being edited, NOT the gateway's process.cwd()
- * (which is the service home, not the workspace). Returns the project root, or undefined if none.
+ * Walk up from `startDir` to find the GSD project root — the nearest ancestor whose `.planning` dir carries
+ * a real GSD marker (STATE.md or ROADMAP.md). Requiring a marker (not bare `.planning/` existence) is what
+ * stops a STRAY `.planning` (e.g. ~/.planning/research with no roadmap) from being mis-detected as a project
+ * — which made enforcement mis-fire gateway-wide when cwd was the gateway home (live cross-contamination
+ * + pathless-write landmine). A FILE named .planning never anchors (statSync .isDirectory), LOW-1.
  */
 export function gsdProjectRoot(startDir: string): string | undefined {
   let cur = resolve(startDir);
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 64; i++) {
     try {
-      if (existsSync(`${cur}/.planning`)) return cur;
+      const planning = `${cur}/.planning`;
+      if (statSync(planning).isDirectory() && (existsSyncSafe(`${planning}/STATE.md`) || existsSyncSafe(`${planning}/ROADMAP.md`))) {
+        return cur;
+      }
     } catch {
-      /* perm */
+      /* missing / perm — keep walking */
     }
     const parent = dirname(cur);
     if (parent === cur) return undefined;
     cur = parent;
   }
   return undefined;
+}
+
+/** existsSync without importing it twice; statSync-based so a perm error is swallowed (not thrown). */
+function existsSyncSafe(p: string): boolean {
+  try {
+    statSync(p);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

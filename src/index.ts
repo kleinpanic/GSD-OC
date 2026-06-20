@@ -13,7 +13,7 @@ import { retrieve } from "./retrieval/retrieve.js";
 import { embedAvailable } from "./retrieval/embed.js";
 import { selectPath } from "./orchestrate/select-path.js";
 import { readGsdConfig, bootstrapGsdConfig } from "./engine/config.js";
-import { enforceToolGate, enforceSpawnPersona } from "./hooks/enforce-gate.js";
+import { enforceToolGate, enforceSpawnPersona, gsdProjectRoot } from "./hooks/enforce-gate.js";
 import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
 import { executePath, makeSubagentDispatcher } from "./orchestrate/execute-path.js";
 
@@ -35,6 +35,8 @@ const stateParams = Type.Object(
     blocker: Type.Optional(Type.String({ description: "For add-blocker: the blocker text." })),
     total_plans: Type.Optional(Type.Number()),
     completed_plans: Type.Optional(Type.Number()),
+    total_phases: Type.Optional(Type.Number()),
+    completed_phases: Type.Optional(Type.Number()),
   },
   { additionalProperties: false },
 );
@@ -157,19 +159,25 @@ const entry = definePluginEntry({
     api.registerHook(
       "before_tool_call",
       ((event: unknown, ctx: unknown) => {
-        // ENF-SPAWN: subagents spawned in a GSD context must carry a GSD persona (inject it). Runs first —
-        // if it rewrites the spawn params, the edit-gate (which ignores spawn tools) returns void anyway.
-        const spawn = enforceSpawnPersona(
-          event as Parameters<typeof enforceSpawnPersona>[0],
-          ctx as Parameters<typeof enforceSpawnPersona>[1],
-          { pluginConfig },
-        );
-        if (spawn) return spawn;
-        return enforceToolGate(
-          event as Parameters<typeof enforceToolGate>[0],
-          ctx as Parameters<typeof enforceToolGate>[1],
-          { pluginConfig },
-        );
+        // A buggy gate must NEVER brick every tool call — fail OPEN (allow) on any internal error (CR-3).
+        try {
+          // ENF-SPAWN: subagents spawned in a GSD context must carry a GSD persona (inject it). Runs first —
+          // if it rewrites the spawn params, the edit-gate (which ignores spawn tools) returns void anyway.
+          const spawn = enforceSpawnPersona(
+            event as Parameters<typeof enforceSpawnPersona>[0],
+            ctx as Parameters<typeof enforceSpawnPersona>[1],
+            { pluginConfig },
+          );
+          if (spawn) return spawn;
+          return enforceToolGate(
+            event as Parameters<typeof enforceToolGate>[0],
+            ctx as Parameters<typeof enforceToolGate>[1],
+            { pluginConfig },
+          );
+        } catch (e) {
+          console.warn(`[gsd-oc] enforce-gate error (failing open): ${e instanceof Error ? e.message : String(e)}`);
+          return undefined;
+        }
       }) as never,
       { name: "gsd-oc:enforce-gate" } as never,
     );
@@ -298,17 +306,28 @@ const entry = definePluginEntry({
       description:
         "Advance GSD project state in .planning/STATE.md (op: set-status | record-progress | add-decision | add-blocker). Call this as GSD work completes so the route engine sees live state.",
       parameters: stateParams,
-      async execute(_toolCallId: string, args: { op?: string; status?: string; decision?: string; blocker?: string; total_plans?: number; completed_plans?: number }, _signal?: unknown) {
-        const dir = ".planning";
+      async execute(_toolCallId: string, args: { op?: string; status?: string; decision?: string; blocker?: string; total_plans?: number; completed_plans?: number; total_phases?: number; completed_phases?: number }, _signal?: unknown) {
+        // Best-effort project resolution: walk up from cwd to a .planning root. The tool execute context
+        // carries NO workspaceDir (SDK limit), so when cwd isn't the workspace (gateway home) this falls
+        // back to cwd-relative .planning. The robust state-advance channel is agent_end (workspaceDir) — SDK-03.
+        const root = gsdProjectRoot(process.cwd());
+        const dir = root ? `${root}/.planning` : ".planning";
         try {
           switch (args?.op) {
-            case "set-status": if (args.status) setStatus(dir, args.status); break;
-            case "record-progress": recordProgress(dir, { total_plans: args.total_plans, completed_plans: args.completed_plans }); break;
-            case "add-decision": if (args.decision) addDecision(dir, args.decision); break;
-            case "add-blocker": if (args.blocker) addBlocker(dir, args.blocker); break;
+            case "set-status":
+              if (!args.status) return { ok: false, error: "set-status requires a non-empty status" };
+              setStatus(dir, args.status); break;
+            case "record-progress":
+              recordProgress(dir, { total_plans: args.total_plans, completed_plans: args.completed_plans, total_phases: args.total_phases, completed_phases: args.completed_phases }); break;
+            case "add-decision":
+              if (!args.decision) return { ok: false, error: "add-decision requires non-empty decision text" };
+              addDecision(dir, args.decision); break;
+            case "add-blocker":
+              if (!args.blocker) return { ok: false, error: "add-blocker requires non-empty blocker text" };
+              addBlocker(dir, args.blocker); break;
             default: return { ok: false, error: `unknown op: ${args?.op}` };
           }
-          return { ok: true, op: args.op };
+          return { ok: true, op: args.op, planningDir: dir };
         } catch (e) {
           return { ok: false, error: e instanceof Error ? e.message : String(e) };
         }

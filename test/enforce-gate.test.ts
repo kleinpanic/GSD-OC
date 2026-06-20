@@ -139,3 +139,20 @@ test("ENF-SPAWN: persona written back into the SAME key (prompt-keyed spawn — 
     assert.equal(p.message, undefined, "no spurious message key");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+import { targetPathOf, gsdProjectRoot } from "../src/hooks/enforce-gate.js";
+
+test("CR-3: a non-string derivedPaths element does not crash the gate (returns undefined)", () => {
+  assert.equal(targetPathOf({ toolName: "edit", derivedPaths: [123 as unknown as string] }), undefined);
+  assert.equal(targetPathOf({ toolName: "edit", params: { path: ["/a"] as unknown as string } }), undefined);
+  // and the gate as a whole must not throw on such an event
+  assert.doesNotThrow(() => enforceToolGate({ toolName: "edit", derivedPaths: [123 as unknown as string] }, {}, { cwd: "/tmp" }));
+});
+
+test("LOW-1: a FILE named .planning does not anchor a project root", () => {
+  const dir = mkdtempSync(join(tmpdir(), "gsd-fileplan-"));
+  try {
+    writeFileSync(join(dir, ".planning"), "i am a file");
+    assert.equal(gsdProjectRoot(dir), undefined, ".planning file is not a project root");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
