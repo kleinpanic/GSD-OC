@@ -7,20 +7,17 @@
  * Run:  node --experimental-strip-types scripts/build-corpus.ts
  * Emits: src/retrieval/corpus.generated.json  (gitignored build artifact, shipped in dist)
  */
-import { readdirSync, readFileSync, writeFileSync, statSync, existsSync } from "node:fs";
-import { homedir } from "node:os";
+import { readFileSync, writeFileSync, statSync } from "node:fs";
 import { join, dirname, basename, relative, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { GsdDoc, GsdDocKind, GsdCorpus } from "../src/retrieval/types.ts";
 import { chunkDoc } from "../src/retrieval/chunk.ts";
 import { buildManifest, sha256 } from "../src/retrieval/manifest.ts";
+import { detectGsdInstall, safeList } from "../src/retrieval/detect.ts";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(SCRIPT_DIR, "..");
 const OUT = join(REPO_ROOT, "src", "retrieval", "corpus.generated.json");
-
-const GSD_CORE = join(homedir(), ".claude", "gsd-core");
-const AGENTS = join(homedir(), ".claude", "agents");
 
 interface Source {
   kind: GsdDocKind;
@@ -29,26 +26,19 @@ interface Source {
   filter: (f: string) => boolean;
 }
 
-const SOURCES: Source[] = [
-  { kind: "workflow", root: join(GSD_CORE, "workflows"), recursive: false, filter: (f) => f.endsWith(".md") },
-  { kind: "agent", root: AGENTS, recursive: false, filter: (f) => f.startsWith("gsd-") && f.endsWith(".md") },
-  { kind: "reference", root: join(GSD_CORE, "references"), recursive: false, filter: (f) => f.endsWith(".md") },
-  { kind: "template", root: join(GSD_CORE, "templates"), recursive: true, filter: (f) => f.endsWith(".md") },
-];
-
-function listFiles(root: string, recursive: boolean): string[] {
-  if (!existsSync(root)) return [];
-  const ents = readdirSync(root, { withFileTypes: true });
-  const out: string[] = [];
-  for (const e of ents) {
-    const full = join(root, e.name);
-    if (e.isDirectory()) {
-      if (recursive) out.push(...listFiles(full, true));
-    } else if (e.isFile()) {
-      out.push(full);
-    }
+function sources(): Source[] {
+  const install = detectGsdInstall();
+  if (!install) {
+    throw new Error(
+      "no GSD install detected — probed claude/codex/opencode/gemini/pi/hermes/cursor/copilot homes for gsd-core/workflows",
+    );
   }
-  return out.sort();
+  return install.docRoots.map((d) => ({
+    kind: d.kind,
+    root: d.root,
+    recursive: d.recursive,
+    filter: d.kind === "agent" ? (f: string) => f.startsWith("gsd-") && f.endsWith(".md") : (f: string) => f.endsWith(".md"),
+  }));
 }
 
 function titleOf(text: string, fallback: string): string {
@@ -59,10 +49,10 @@ function titleOf(text: string, fallback: string): string {
   return fallback;
 }
 
-function buildDocs(): GsdDoc[] {
+function buildDocs(srcs: Source[]): GsdDoc[] {
   const docs: GsdDoc[] = [];
-  for (const src of SOURCES) {
-    const files = listFiles(src.root, src.recursive).filter((f) => src.filter(basename(f)));
+  for (const src of srcs) {
+    const files = safeList(src.root, src.recursive).filter((f) => src.filter(basename(f)));
     if (files.length === 0) throw new Error(`no ${src.kind} sources found under ${src.root}`);
     for (const path of files) {
       const text = readFileSync(path, "utf8");
@@ -75,9 +65,10 @@ function buildDocs(): GsdDoc[] {
 }
 
 export function generateCorpus(): GsdCorpus {
-  const docs = buildDocs();
+  const srcs = sources();
+  const docs = buildDocs(srcs);
   const chunks = docs.flatMap((d) => chunkDoc(d));
-  const roots = SOURCES.map((s) => s.root);
+  const roots = srcs.map((s) => s.root);
   const manifest = buildManifest(docs, chunks, roots);
   return { docs, chunks, manifest };
 }
