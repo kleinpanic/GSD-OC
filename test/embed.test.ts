@@ -22,7 +22,7 @@ test("embedTexts posts an OpenAI-compatible request (url, bearer, model, input_t
   assert.deepEqual(out, [[1, 2, 3]]);
 });
 
-test("embedTexts batches inputs in chunks of 64", async () => {
+test("embedTexts batches inputs in chunks of 32", async () => {
   let calls = 0;
   const fakeFetch = (async (_url: string, init: RequestInit) => {
     calls++;
@@ -35,7 +35,7 @@ test("embedTexts batches inputs in chunks of 64", async () => {
     { config: cfg, fetch: fakeFetch },
   );
   assert.equal(out.length, 130);
-  assert.equal(calls, 3);
+  assert.equal(calls, 5); // 130 inputs / 32 per batch = 5 requests
 });
 
 test("embedTexts([]) returns [] without calling fetch", async () => {
