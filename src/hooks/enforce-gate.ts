@@ -11,13 +11,14 @@
  *    halt. A greenfield project (no .planning) or a project past planning (execute/verify/ship) is allowed.
  *  - Opt-out: `.gsd-off` / pluginConfig, or `workflow.enforce_tool_gate: false` in .planning/config.json.
  */
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { route } from "../engine/route.js";
-import { isCodingWorkspace } from "./auto-engage.js";
 import { optedOut } from "../engage/opt-out.js";
 import { readGsdConfig } from "../engine/config.js";
 import { resolveAgentOptional } from "../agents/index.js";
 
-export type BeforeToolCallEvent = { toolName: string; params?: Record<string, unknown> };
+export type BeforeToolCallEvent = { toolName: string; params?: Record<string, unknown>; derivedPaths?: readonly string[] };
 export type BeforeToolCallContext = { agentId?: string; sessionKey?: string };
 export type BeforeToolCallResult = { block?: boolean; blockReason?: string; params?: Record<string, unknown> };
 export type EnforceGateDeps = { pluginConfig?: Record<string, unknown>; cwd?: string };
@@ -27,6 +28,37 @@ const MUTATING_TOOLS = new Set(["edit", "write", "file_write", "apply_patch", "m
 
 /** route() actions that mean "planning is not done yet" — editing code now is out-of-order GSD. */
 const PRE_BUILD_ACTIONS = new Set(["discuss-phase", "plan-phase"]);
+
+/** Param keys that may hold the target file path of a mutation tool. */
+const PATH_KEYS = ["file_path", "path", "file", "filePath", "target_file", "filename"];
+
+/** Extract the target file path from a before_tool_call event (derivedPaths first, then params). */
+export function targetPathOf(event: BeforeToolCallEvent): string | undefined {
+  if (event.derivedPaths && event.derivedPaths.length) return event.derivedPaths[0];
+  const p = event.params ?? {};
+  for (const k of PATH_KEYS) if (typeof p[k] === "string") return p[k] as string;
+  return undefined;
+}
+
+/**
+ * Walk up from `startDir` to find the GSD project root — the nearest ancestor containing `.planning`.
+ * This is how enforcement scopes itself to the actual project being edited, NOT the gateway's process.cwd()
+ * (which is the service home, not the workspace). Returns the project root, or undefined if none.
+ */
+export function gsdProjectRoot(startDir: string): string | undefined {
+  let cur = resolve(startDir);
+  for (let i = 0; i < 40; i++) {
+    try {
+      if (existsSync(`${cur}/.planning`)) return cur;
+    } catch {
+      /* perm */
+    }
+    const parent = dirname(cur);
+    if (parent === cur) return undefined;
+    cur = parent;
+  }
+  return undefined;
+}
 
 /**
  * Pure enforcement decision. Returns a block result (with a corrective reason) when a file-mutation tool is
@@ -39,15 +71,29 @@ export function enforceToolGate(
 ): BeforeToolCallResult | void {
   if (!MUTATING_TOOLS.has((event.toolName ?? "").toLowerCase())) return; // not a file mutation → allow
 
-  const cwd = deps.cwd ?? process.cwd();
-  if (!isCodingWorkspace(cwd)) return; // not a coding workspace → GSD does not apply
-  if (optedOut({ cwd, pluginConfig: deps.pluginConfig })) return; // .gsd-off / pluginConfig opt-out
+  // Scope to the EDITED FILE's GSD project, NOT process.cwd() (the gateway home). Find the .planning root
+  // by walking up from the file being edited; if the edit isn't inside a GSD project, GSD does not apply.
+  const filePath = targetPathOf(event);
+  const startDir = filePath ? dirname(resolve(deps.cwd ?? process.cwd(), filePath)) : (deps.cwd ?? process.cwd());
+  const projectRoot = gsdProjectRoot(startDir);
+  if (!projectRoot) return; // edit not inside any GSD project → allow
 
-  const planningDir = `${cwd.replace(/\/+$/, "")}/.planning`;
+  if (optedOut({ cwd: projectRoot, pluginConfig: deps.pluginConfig })) return; // .gsd-off / pluginConfig opt-out
+
+  const planningDir = `${projectRoot}/.planning`;
   const { config } = readGsdConfig(planningDir);
   if (config.workflow?.enforce_tool_gate === false) return; // explicit per-project disable
 
   const r = route(planningDir);
+  // A FAILED, unresolved verification is a hard halt (route returns phase:null + reason verification-fail).
+  // Check it BEFORE the greenfield guard below — both carry phase:null, but this one MUST block (verifier
+  // caught the greenfield guard swallowing it as a dead branch).
+  if (r.action === "halt" && r.reason === "verification-fail") {
+    return {
+      block: true,
+      blockReason: `GSD enforcement: a phase verification is FAILED and unresolved — resolve it before editing more code.`,
+    };
+  }
   // Greenfield (no roadmap/phases) → route returns discuss-phase with phase:null. Don't block — there's no
   // plan structure to enforce against, and blocking would brick a fresh project. The auto-engage prompt
   // nudges toward gsd_orchestrate instead.
@@ -60,12 +106,6 @@ export function enforceToolGate(
         `GSD enforcement: phase ${r.phase} is not planned yet (next GSD step: ${r.action}). ` +
         `Plan before editing — call gsd_orchestrate with your intent (or run the ${r.action} step) first. ` +
         `Opt out: add a .gsd-off file or set workflow.enforce_tool_gate:false in .planning/config.json.`,
-    };
-  }
-  if (r.action === "halt" && r.reason === "verification-fail") {
-    return {
-      block: true,
-      blockReason: `GSD enforcement: a phase verification is FAILED and unresolved — resolve it before editing more code.`,
     };
   }
   return; // route says execute/verify/ship/etc. → planning done → allow the edit
@@ -105,9 +145,11 @@ export function enforceSpawnPersona(
   deps: EnforceGateDeps = {},
 ): BeforeToolCallResult | void {
   if (!SPAWN_TOOLS.has((event.toolName ?? "").toLowerCase())) return;
-  const cwd = deps.cwd ?? process.cwd();
-  if (!isCodingWorkspace(cwd)) return;
-  if (optedOut({ cwd, pluginConfig: deps.pluginConfig })) return;
+  // Scope to an actual GSD project (a .planning ancestor of cwd) so we never inject GSD personas into
+  // non-GSD agents' spawns (finance/legal/etc.). No GSD project → leave the spawn untouched.
+  const projectRoot = gsdProjectRoot(deps.cwd ?? process.cwd());
+  if (!projectRoot) return;
+  if (optedOut({ cwd: projectRoot, pluginConfig: deps.pluginConfig })) return;
 
   const params = event.params ?? {};
   const taskText = String(params.message ?? params.task ?? params.prompt ?? "");
@@ -120,6 +162,9 @@ export function enforceSpawnPersona(
   const preamble =
     `<!-- gsd-oc:persona -->\nYou are the GSD **${role}** subagent operating under the GSD methodology — ` +
     `follow this role's contract, not free-form work.\n\n${persona}\n\n--- Task ---\n`;
-  const key = params.message != null ? "message" : params.task != null ? "task" : "message";
+  // Write the persona back into the SAME key the instruction came from (sessions_spawn uses `task`).
+  // The verifier caught that writing to a fresh `message` key when only `prompt` is present leaves the
+  // original instruction untouched — pick the key by precedence of presence, defaulting to message.
+  const key = params.message != null ? "message" : params.task != null ? "task" : params.prompt != null ? "prompt" : "message";
   return { params: { ...params, [key]: preamble + taskText } };
 }
