@@ -10,7 +10,7 @@
 // Imports the COMPILED dist modules (real .js) so this strip-types script resolves the full value-import
 // graph (src/*.ts cross-import with .js, which strip-types can't resolve). Run `npm run build` first.
 import { basename } from "node:path";
-import { statSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { loadCorpus } from "../dist/retrieval/corpus.js";
 import { buildVectors } from "../dist/retrieval/index-build.js";
 import { embedTexts, sparkConfig } from "../dist/retrieval/embed.js";
@@ -18,6 +18,7 @@ import { writeVectorCache, writeLanceTable, vectorArtifactPaths, loadVectorCache
 
 export async function generateVectors(): Promise<{ rows: number; dim: number; reembedded: number; reused: number }> {
   const corpus = loadCorpus();
+  const paths = vectorArtifactPaths();
   const prior = loadVectorCache();
   const cache = new Map<string, number[]>();
   if (prior) {
@@ -25,13 +26,17 @@ export async function generateVectors(): Promise<{ rows: number; dim: number; re
       cache.set(prior.chunkIds[r], Array.from(prior.matrix.subarray(r * prior.dim, (r + 1) * prior.dim)));
     }
   }
+  // RET-06: feed back the PRIOR build's manifest so diffManifest re-embeds only changed docs.
+  const prevManifest = existsSync(paths.manifest) ? JSON.parse(readFileSync(paths.manifest, "utf8")) : null;
   const result = await buildVectors({
     corpus,
     embed: (texts, inputType) => embedTexts(texts, inputType),
     cache,
+    prevManifest,
   });
   writeVectorCache(result.rows.map((r) => ({ chunkId: r.chunkId, vector: r.vector })));
-  await writeLanceTable(vectorArtifactPaths().lance, result.rows);
+  await writeLanceTable(paths.lance, result.rows);
+  writeFileSync(paths.manifest, JSON.stringify(result.manifest));
   return { rows: result.rows.length, dim: result.rows[0]?.vector.length ?? 0, reembedded: result.reembedded, reused: result.reused };
 }
 
