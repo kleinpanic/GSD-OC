@@ -11,6 +11,7 @@ import { registerInternalHook, isAgentBootstrapEvent } from "openclaw/plugin-sdk
 import { gsdBootstrapHandler, type AgentBootstrapEvent } from "./engage/bootstrap-inject.js";
 import { retrieve } from "./retrieval/retrieve.js";
 import { embedAvailable } from "./retrieval/embed.js";
+import { selectPath } from "./orchestrate/select-path.js";
 
 const PLUGIN_ID = "gsd-oc";
 const PLUGIN_NAME = "GSD-OC";
@@ -128,12 +129,23 @@ const entry = definePluginEntry({
         "Route a coding/big-work intent through the GSD lifecycle by dispatching the appropriate GSD subagent.",
       parameters: orchestrateParams,
       async execute(_toolCallId: string, args: { intent?: string }, _signal?: unknown) {
+        const intent = (args?.intent ?? "").trim();
         const state = await readState(".planning");
-        return {
+        const base = {
           engaged: true,
           current_phase: state.current_phase,
           current_phase_name: state.current_phase_name,
-          intent: args?.intent ?? null,
+          intent: intent || null,
+        };
+        if (!intent) return base;
+        // PATH-01: drive the finite GSD path from retrieval, not a static table — retrieve the relevant
+        // skills/subagents for this intent, then order them into a lifecycle path (long-tail included).
+        const retrieved = await retrieve(intent, { topK: 12 });
+        const path = selectPath({ intent, retrieved: retrieved.map((r) => ({ docId: r.docId })) });
+        return {
+          ...base,
+          path: path.map((s) => ({ verb: s.verb, skill: s.skill, gate: s.gate, reason: s.reason })),
+          relevant_skills: retrieved.slice(0, 8).map((r) => ({ id: r.docId, modality: r.modalities })),
         };
       },
     } as never);
