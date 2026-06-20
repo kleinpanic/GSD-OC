@@ -137,3 +137,16 @@ test("MT-06: baseAgentId nests the persona as a sub-lane (agent:<base>:<gsd-role
   const runParams = calls.run[0] as { sessionKey: string };
   assert.equal(runParams.sessionKey, "agent:dev:gsd-executor");
 });
+
+test("model routing is LIVE: runSubagent sets runParams.model from resolveModel (was dead code)", async () => {
+  let captured: { model?: string } = {};
+  const api = { runtime: { subagent: {
+    async run(p: { model?: string }) { captured = p; return { runId: "r" }; },
+    async waitForRun() { return { status: "ok" as const }; },
+    async getSessionMessages() { return { messages: [{ role: "assistant", content: "ok" }] }; },
+    async deleteSession() {},
+  } } };
+  // gsd-planner is in AGENT_CATALOG; under an explicit model override the resolved model must be set.
+  await runSubagent(api as never, "gsd-planner", "msg", { model: "opus" });
+  assert.equal(captured.model, "opus", "explicit model routed onto runParams");
+});

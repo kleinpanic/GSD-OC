@@ -49,9 +49,9 @@ export function defaultGsdConfig(): GsdConfig {
       code_review_depth: "standard",
       security_enforcement: true,
       security_asvs_level: 1,
-      plan_bounce: true,
+      plan_bounce: false, // upstream CONFIG_DEFAULTS default is false
       plan_bounce_passes: 2,
-      auto_advance: true,
+      auto_advance: false, // upstream CONFIG_DEFAULTS default is false
       pattern_mapper: true,
       ui_phase: true,
       ui_safety_gate: true,
