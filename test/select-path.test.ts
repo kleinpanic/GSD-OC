@@ -9,7 +9,7 @@ test("PATH-01: backbone always present, in canonical lifecycle order", () => {
   const p = selectPath({ intent: "build a feature", retrieved: [] });
   assert.deepEqual(
     p.map((s) => s.verb),
-    ["discuss", "map-codebase", "plan", "execute", "code-review", "verify", "ship"],
+    ["discuss", "map-codebase", "research", "plan", "execute", "code-review", "verify", "ship"],
   );
   // discuss / plan / verify are decision gates (ENF-01)
   assert.ok(p.find((s) => s.verb === "discuss")!.gate);
@@ -41,5 +41,6 @@ test("PATH-01: security intent → secure step inserted", () => {
 test("PATH-01: no long-tail retrieval → backbone only, no spurious long-tail steps", () => {
   const p = selectPath({ intent: "add a config option", retrieved: [{ docId: "workflow:plan-phase" }, { docId: "agent:gsd-planner" }] });
   assert.ok(!has(p, "ui") && !has(p, "debug") && !has(p, "ai-integration") && !has(p, "secure"));
-  assert.equal(p.length, 7);
+  assert.equal(p.length, 8); // backbone: discuss, map-codebase, research, plan, execute, code-review, verify, ship
+  assert.ok(has(p, "research"), "research is core (research-first GSD, ENF-02)");
 });

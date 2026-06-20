@@ -14,6 +14,7 @@ import { runSubagent, type RunSubagentApi } from "../dispatch/run-subagent.js";
  */
 export const VERB_TO_SUBAGENT: Record<string, string> = {
   "map-codebase": "gsd-codebase-mapper",
+  research: "gsd-phase-researcher",
   plan: "gsd-planner",
   execute: "gsd-executor",
   "code-review": "gsd-code-reviewer",
@@ -22,6 +23,7 @@ export const VERB_TO_SUBAGENT: Record<string, string> = {
   secure: "gsd-security-auditor",
   ui: "gsd-ui-researcher",
   "ai-integration": "gsd-eval-planner",
+  docs: "gsd-doc-writer",
 };
 
 /**
