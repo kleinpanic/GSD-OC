@@ -43,6 +43,7 @@ export async function buildVectors(opts: {
   const toEmbed: GsdChunk[] = corpus.chunks.filter((ch) => reembedDocIds.has(ch.docId) || !cache.has(ch.id));
   if (toEmbed.length > 0) {
     const vecs = await embed(toEmbed.map((c) => c.text), "passage");
+    if (vecs.length !== toEmbed.length) throw new Error(`embedder returned ${vecs.length} vectors for ${toEmbed.length} chunks`);
     toEmbed.forEach((c, i) => cache.set(c.id, vecs[i]));
   }
 

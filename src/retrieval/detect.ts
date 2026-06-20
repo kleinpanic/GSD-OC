@@ -33,7 +33,7 @@ export const DENY: { dirs: Set<string>; globs: RegExp[] } = {
     ".npmrc",
     ".config",
   ]),
-  globs: [/^\.env\..+$/, /\.pem$/, /\.key$/, /_history$/],
+  globs: [/^\.env\..+$/, /\.(pem|key|p12|pfx|crt|cer|gpg|asc|keystore|jks)$/, /_history$/, /(^|\.)git-credentials$/, /^\.htpasswd$/],
 };
 
 export function isDenied(name: string): boolean {
