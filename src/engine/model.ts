@@ -18,7 +18,7 @@ export const VALID_PROFILES = ["quality", "balanced", "budget", "adaptive", "inh
 export type Profile = (typeof VALID_PROFILES)[number];
 
 /**
- * Per-agent tier table mirroring model-catalog.json `agents` (the OD2-relevant subset).
+ * Per-agent tier table mirroring model-catalog.json `agents` (all 33 agents, faithful to upstream model-catalog.json).
  * `quality` = golden. `adaptive` is derived from routingTier via ADAPTIVE_TIER_MAP.
  */
 export type AgentCatalogEntry = {
@@ -29,11 +29,40 @@ export type AgentCatalogEntry = {
 };
 
 export const AGENT_CATALOG: Record<string, AgentCatalogEntry> = {
-  "gsd-planner": { quality: "opus", balanced: "opus", budget: "sonnet", routingTier: "heavy" },
-  "gsd-roadmapper": { quality: "opus", balanced: "sonnet", budget: "sonnet", routingTier: "heavy" },
-  "gsd-executor": { quality: "opus", balanced: "sonnet", budget: "sonnet", routingTier: "standard" },
-  "gsd-verifier": { quality: "sonnet", balanced: "sonnet", budget: "haiku", routingTier: "standard" },
+  "gsd-advisor-researcher": { quality: "opus", balanced: "sonnet", budget: "haiku", routingTier: "standard" },
+  "gsd-ai-researcher": { quality: "opus", balanced: "sonnet", budget: "haiku", routingTier: "standard" },
+  "gsd-assumptions-analyzer": { quality: "opus", balanced: "sonnet", budget: "sonnet", routingTier: "heavy" },
+  "gsd-code-fixer": { quality: "opus", balanced: "sonnet", budget: "sonnet", routingTier: "standard" },
+  "gsd-code-reviewer": { quality: "opus", balanced: "sonnet", budget: "sonnet", routingTier: "standard" },
+  "gsd-codebase-mapper": { quality: "sonnet", balanced: "haiku", budget: "haiku", routingTier: "light" },
+  "gsd-debug-session-manager": { quality: "opus", balanced: "sonnet", budget: "sonnet", routingTier: "heavy" },
+  "gsd-debugger": { quality: "opus", balanced: "sonnet", budget: "sonnet", routingTier: "heavy" },
+  "gsd-doc-classifier": { quality: "sonnet", balanced: "haiku", budget: "haiku", routingTier: "light" },
+  "gsd-doc-synthesizer": { quality: "opus", balanced: "sonnet", budget: "haiku", routingTier: "standard" },
+  "gsd-doc-verifier": { quality: "sonnet", balanced: "sonnet", budget: "haiku", routingTier: "light" },
   "gsd-doc-writer": { quality: "opus", balanced: "sonnet", budget: "haiku", routingTier: "standard" },
+  "gsd-domain-researcher": { quality: "opus", balanced: "sonnet", budget: "haiku", routingTier: "standard" },
+  "gsd-eval-auditor": { quality: "opus", balanced: "sonnet", budget: "haiku", routingTier: "standard" },
+  "gsd-eval-planner": { quality: "opus", balanced: "opus", budget: "sonnet", routingTier: "heavy" },
+  "gsd-executor": { quality: "opus", balanced: "sonnet", budget: "sonnet", routingTier: "standard" },
+  "gsd-framework-selector": { quality: "opus", balanced: "sonnet", budget: "sonnet", routingTier: "heavy" },
+  "gsd-integration-checker": { quality: "sonnet", balanced: "sonnet", budget: "haiku", routingTier: "light" },
+  "gsd-intel-updater": { quality: "opus", balanced: "sonnet", budget: "haiku", routingTier: "light" },
+  "gsd-nyquist-auditor": { quality: "sonnet", balanced: "sonnet", budget: "haiku", routingTier: "light" },
+  "gsd-pattern-mapper": { quality: "sonnet", balanced: "sonnet", budget: "haiku", routingTier: "light" },
+  "gsd-phase-researcher": { quality: "opus", balanced: "sonnet", budget: "haiku", routingTier: "standard" },
+  "gsd-plan-checker": { quality: "sonnet", balanced: "sonnet", budget: "haiku", routingTier: "light" },
+  "gsd-planner": { quality: "opus", balanced: "opus", budget: "sonnet", routingTier: "heavy" },
+  "gsd-project-researcher": { quality: "opus", balanced: "sonnet", budget: "haiku", routingTier: "standard" },
+  "gsd-research-synthesizer": { quality: "sonnet", balanced: "sonnet", budget: "haiku", routingTier: "light" },
+  "gsd-roadmapper": { quality: "opus", balanced: "sonnet", budget: "sonnet", routingTier: "heavy" },
+  "gsd-security-auditor": { quality: "opus", balanced: "sonnet", budget: "sonnet", routingTier: "heavy" },
+  "gsd-ui-auditor": { quality: "sonnet", balanced: "sonnet", budget: "haiku", routingTier: "light" },
+  "gsd-ui-checker": { quality: "sonnet", balanced: "sonnet", budget: "haiku", routingTier: "light" },
+  "gsd-ui-researcher": { quality: "opus", balanced: "sonnet", budget: "haiku", routingTier: "standard" },
+  "gsd-user-profiler": { quality: "opus", balanced: "sonnet", budget: "sonnet", routingTier: "heavy" },
+  "gsd-verifier": { quality: "sonnet", balanced: "sonnet", budget: "haiku", routingTier: "standard" },
+
 };
 
 export type ModelConfig = {

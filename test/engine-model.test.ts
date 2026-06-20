@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveModel } from "../src/engine/model.js";
+import { resolveModel, AGENT_CATALOG } from "../src/engine/model.js";
 
 test("balanced profile maps a heavy-tier agent to its balanced model", () => {
   assert.equal(resolveModel("gsd-planner", { model_profile: "balanced" }), "opus");
@@ -67,4 +67,12 @@ test("M-03: a valid override tier still wins (incl. inherit)", () => {
     resolveModel("gsd-planner", { model_profile: "balanced", model_profile_overrides: { "gsd-planner": "inherit" } }),
     "inherit",
   );
+});
+
+test("MODEL-01: every one of the 33 roster agents has a model-catalog entry (no silent inherit)", () => {
+  const ids = Object.keys(AGENT_CATALOG);
+  assert.equal(ids.length, 33, "catalog covers all 33 GSD agents");
+  for (const id of ids) {
+    assert.notEqual(resolveModel(id, { model_profile: "balanced" }), null, `${id} resolves a model`);
+  }
 });
