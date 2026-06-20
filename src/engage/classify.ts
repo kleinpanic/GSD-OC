@@ -62,6 +62,11 @@ const RULES: Array<{ re: RegExp; category: string; reason: string; weak?: boolea
   { re: /\b(refactor|migrat(e|ion)|redesign|re-?architect|architecture)\b/, category: "phase", reason: "multi-file architecture/refactor/migration (do.md:52)" },
   // phase — security/audit work (gsd-secure-phase): auditing/hardening is substantial GSD work.
   { re: /\b(audit|secur\w*|vulnerab\w*|harden|pentest|threat model)\b/, category: "phase", reason: "security/audit work (gsd-secure-phase)" },
+  // phase — GSD lifecycle work verbs the classifier was blind to (spike/sketch/eval/verify/discuss/ship/
+  // docs/graphify). These map to real GSD stages; without them the agent gets ZERO engagement on core
+  // lifecycle requests ("verify the phase", "ship the milestone", "evaluate my agent"). WEAK so a
+  // question framing ("what does ship mean?") is still suppressed.
+  { re: /\b(spike|prototype|sketch|mockup|evaluat\w*|assess|verif\w*|validat\w*|discuss|clarif\w*|ship|release|deploy|publish|document\w*|changelog|graphify|knowledge graph)\b/, category: "phase", reason: "GSD lifecycle work verb (spike/eval/verify/discuss/ship/docs)", weak: true },
   // phase — substantial build verbs (feature/api/service). WEAK (L-01/WR-02): the noun
   // "the build" in a question framing ("what does the build do?") must NOT engage; a real
   // request without a question frame ("build a new service") still fires.

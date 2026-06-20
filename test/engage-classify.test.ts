@@ -114,3 +114,20 @@ test("'how do I fix the build?' engages via the strong fix verb", () => {
 test("debug classification is case-insensitive (FIX THE BUG == fix the bug)", () => {
   assert.deepEqual(classifyIntent("FIX THE BUG"), classifyIntent("fix the bug"));
 });
+
+test("GSD lifecycle verbs all engage (no core stage is a dead 'chat')", () => {
+  // Regression: the classifier was blind to spike/sketch/eval/verify/discuss/ship/docs → an agent
+  // requesting a core GSD stage got ZERO engagement. Lock that every lifecycle verb engages.
+  const lifecycle = [
+    "spike a risky technical approach", "sketch a throwaway UI mockup", "evaluate my AI agent output",
+    "verify the phase delivered what it promised", "discuss the requirements before planning",
+    "ship the milestone and open a PR", "write documentation for the project", "audit the security",
+  ];
+  for (const q of lifecycle) assert.equal(classifyIntent(q).engage, true, `should engage: ${q}`);
+});
+
+test("lifecycle verbs in a QUESTION frame stay chat (no over-engage)", () => {
+  for (const q of ["what does ship mean?", "how does verification work?", "what is a spike?"]) {
+    assert.equal(classifyIntent(q).engage, false, `should stay chat: ${q}`);
+  }
+});
