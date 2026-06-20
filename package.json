@@ -22,15 +22,16 @@
     "test": "tsc -p tsconfig.test.json && node --test \"dist-test/test/*.test.js\""
   },
   "dependencies": {
+    "@lancedb/lancedb": "^0.30.0",
     "typebox": "^1.1.38"
   },
   "peerDependencies": {
     "openclaw": ">=2026.5.17"
   },
   "devDependencies": {
-    "typescript": "^5.9.0",
+    "@types/node": "^22.0.0",
     "openclaw": "2026.6.8",
-    "@types/node": "^22.0.0"
+    "typescript": "^5.9.0"
   },
   "license": "MIT"
 }
