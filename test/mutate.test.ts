@@ -70,3 +70,36 @@ test("addDecision + addBlocker append dated entries", () => {
     assert.match(s, /## Blockers\n\n- \d{4}-\d{2}-\d{2} — gateway runtime gap/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("CR-1: $-sequences in a value are stored literally (no replace-string corruption)", () => {
+  // $ is not a quote-trigger, so this stores UNQUOTED but LITERAL — the bug was replace-STRING $-interpretation.
+  assert.match(setFrontmatterField(FM, "status", "a$1b$$c"), /status: a\$1b\$\$c/);
+  // a value with a space IS quoted, and its $/backtick survive verbatim
+  assert.match(setFrontmatterField(FM, "status", "x y$`z"), /status: "x y\$`z"/);
+});
+
+test("CR-2: a regex-special key/section neither throws nor duplicates", () => {
+  assert.doesNotThrow(() => setFrontmatterField(FM, "a.b[", "v"));
+  const once = appendUnderSection("# T\n", "Notes (x)", "hi");
+  const twice = appendUnderSection(once, "Notes (x)", "ho");
+  assert.equal((twice.match(/## Notes \(x\)/g) || []).length, 1, "no duplicate section for a parenthesized name");
+});
+
+test("MED-1: appendUnderSection APPENDS (newest-last), clean spacing", () => {
+  const out = appendUnderSection("## Decisions\n\n- existing-1\n", "Decisions", "newest");
+  assert.match(out, /- existing-1\n- newest/, "newest after existing");
+  assert.ok(!/\n\n\n/.test(out), "no triple newline");
+});
+
+test("MED-2: setProgressFields preserves a nested child block", () => {
+  const nested = "---\nprogress:\n  total_plans: 3\n  meta:\n    nested: 1\n  completed_plans: 1\n---\n";
+  const out = setProgressFields(nested, { completed_plans: 9 });
+  assert.match(out, /completed_plans: 9/);
+  assert.match(out, /meta:\n {4}nested: 1/, "nested block preserved verbatim");
+});
+
+test("MED-4: a multiline value collapses to one YAML line", () => {
+  const out = setFrontmatterField(FM, "status", "line1\nline2");
+  assert.match(out, /status: "line1 line2"/);
+  assert.ok(!/status: "line1\nline2"/.test(out), "no raw newline in scalar");
+});

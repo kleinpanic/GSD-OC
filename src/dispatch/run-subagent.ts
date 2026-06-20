@@ -2,6 +2,7 @@ import { buildAgentMainSessionKey } from "openclaw/plugin-sdk/routing";
 import { resolveAgentOptional } from "../agents/index.js";
 import { resolveModel } from "../engine/model.js";
 import { readGsdConfig } from "../engine/config.js";
+import { gsdProjectRoot } from "../hooks/enforce-gate.js";
 
 /**
  * Minimal structural view of the subagent runtime surface we use
@@ -143,7 +144,11 @@ export async function runSubagent(
   // Per-agent model routing (was dead code — resolveModel had zero callers, so every subagent ran at
   // the parent model regardless of model_profile). Resolve the agent's tier from the GSD config and set
   // it; null (unknown agent / inherit profile) leaves the parent model. opts.model overrides.
-  const model = opts.model ?? resolveModel(agentId, readGsdConfig(opts.planningDir ?? ".planning").config);
+  // Resolve the project's .planning (walk up from cwd) so model_profile is read from the ACTUAL project,
+  // not cwd-relative ".planning" (gateway home). Same SDK limit as gsd_state — best-effort; honors a
+  // project profile when cwd is inside it, else falls back to the default config (HIGH-1).
+  const planningDir = opts.planningDir ?? (gsdProjectRoot(process.cwd()) ? `${gsdProjectRoot(process.cwd())}/.planning` : ".planning");
+  const model = opts.model ?? resolveModel(agentId, readGsdConfig(planningDir).config);
   if (model) runParams.model = model;
   const { runId } = await api.runtime.subagent.run(runParams);
 
