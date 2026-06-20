@@ -14,6 +14,7 @@ import { embedAvailable } from "./retrieval/embed.js";
 import { selectPath } from "./orchestrate/select-path.js";
 import { readGsdConfig, bootstrapGsdConfig } from "./engine/config.js";
 import { enforceToolGate } from "./hooks/enforce-gate.js";
+import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
 import { executePath, makeSubagentDispatcher } from "./orchestrate/execute-path.js";
 
 const PLUGIN_ID = "gsd-oc";
@@ -23,6 +24,20 @@ const PLUGIN_DESCRIPTION = "GSD lifecycle orchestration for OpenClaw — native,
 const ORCHESTRATE_TOOL = "gsd_orchestrate";
 const RETRIEVE_TOOL = "gsd_retrieve";
 const SETTINGS_TOOL = "gsd_settings";
+const STATE_TOOL = "gsd_state";
+
+/** TypeBox schema for the gsd_state mutation tool (ENG-WRITE-01). */
+const stateParams = Type.Object(
+  {
+    op: Type.String({ description: "Mutation: 'set-status' | 'record-progress' | 'add-decision' | 'add-blocker'." }),
+    status: Type.Optional(Type.String({ description: "For set-status (e.g. planning|executing|complete|error)." })),
+    decision: Type.Optional(Type.String({ description: "For add-decision: the decision text." })),
+    blocker: Type.Optional(Type.String({ description: "For add-blocker: the blocker text." })),
+    total_plans: Type.Optional(Type.Number()),
+    completed_plans: Type.Optional(Type.Number()),
+  },
+  { additionalProperties: false },
+);
 
 /** TypeBox schema for the orchestrator tool's parameters. */
 const orchestrateParams = Type.Object(
@@ -265,6 +280,32 @@ const entry = definePluginEntry({
       },
     } as never);
 
+    // ENG-WRITE-01: gsd_state — the WRITE half of the engine. Records GSD state advances (status/progress/
+    // decisions/blockers) to .planning/STATE.md atomically, so route() runs on LIVE state, not a stale
+    // snapshot. Parity with gsd-tools state.* (native, lock-protected). 0 Discord slots.
+    api.registerTool({
+      name: STATE_TOOL,
+      label: "GSD State",
+      description:
+        "Advance GSD project state in .planning/STATE.md (op: set-status | record-progress | add-decision | add-blocker). Call this as GSD work completes so the route engine sees live state.",
+      parameters: stateParams,
+      async execute(_toolCallId: string, args: { op?: string; status?: string; decision?: string; blocker?: string; total_plans?: number; completed_plans?: number }, _signal?: unknown) {
+        const dir = ".planning";
+        try {
+          switch (args?.op) {
+            case "set-status": if (args.status) setStatus(dir, args.status); break;
+            case "record-progress": recordProgress(dir, { total_plans: args.total_plans, completed_plans: args.completed_plans }); break;
+            case "add-decision": if (args.decision) addDecision(dir, args.decision); break;
+            case "add-blocker": if (args.blocker) addBlocker(dir, args.blocker); break;
+            default: return { ok: false, error: `unknown op: ${args?.op}` };
+          }
+          return { ok: true, op: args.op };
+        } catch (e) {
+          return { ok: false, error: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    } as never);
+
     // R0.4 Tier-1: register the 6 namespace router tools (zero Discord slash slots).
     // RTE-01: register the WIRED builder so each router returns the state-aware authoritative
     // next verb (native route('.planning')), not the static substring table (verifier finding).
@@ -323,6 +364,12 @@ Object.defineProperty(entry, toolPluginMetadataSymbol, {
         name: SETTINGS_TOOL,
         label: "GSD Settings",
         description: "Inspect/bootstrap the project's GSD configuration (workflow toggles, model profile) — 0 slots.",
+        parameters: { type: "object", additionalProperties: false, properties: {} },
+      },
+      {
+        name: STATE_TOOL,
+        label: "GSD State",
+        description: "Advance GSD project state (status/progress/decisions/blockers) in .planning/STATE.md — 0 slots.",
         parameters: { type: "object", additionalProperties: false, properties: {} },
       },
       ...routerMetadataTools(),
