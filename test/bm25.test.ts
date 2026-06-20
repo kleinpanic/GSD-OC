@@ -18,8 +18,8 @@ const chunk = (id: string, text: string): GsdChunk => ({
 test("loadCorpus returns the full bundled corpus (RET-01)", () => {
   const corpus = loadCorpus();
   // Chunk count reflects the PORT-01-adapted corpus (Claude-runtime refs rewritten → more compact text).
-  assert.equal(corpus.chunks.length, 3554);
-  assert.equal(corpus.docs.length, 233);
+  assert.equal(corpus.chunks.length, 3712);
+  assert.equal(corpus.docs.length, 251);
   assert.deepEqual(Object.keys(corpus), ["docs", "chunks", "manifest"]);
 });
 
