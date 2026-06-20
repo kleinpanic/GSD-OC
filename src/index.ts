@@ -13,6 +13,7 @@ import { retrieve } from "./retrieval/retrieve.js";
 import { embedAvailable } from "./retrieval/embed.js";
 import { selectPath } from "./orchestrate/select-path.js";
 import { readGsdConfig, bootstrapGsdConfig } from "./engine/config.js";
+import { enforceToolGate } from "./hooks/enforce-gate.js";
 import { executePath, makeSubagentDispatcher } from "./orchestrate/execute-path.js";
 
 const PLUGIN_ID = "gsd-oc";
@@ -134,6 +135,20 @@ const entry = definePluginEntry({
     api.registerHook("before_agent_finalize", autoAdvanceHandler as never, {
       name: "gsd-oc:auto-advance",
     } as never);
+
+    // ENF-HOOK-01: the GSD enforcement gate (the keystone). before_tool_call BLOCKS file-mutation tools when
+    // the project is under GSD but the current phase isn't planned yet — deterministic refusal, not prose.
+    // Safe by construction: only file edits, only when route() says discuss/plan, opt-out via .gsd-off/config.
+    api.registerHook(
+      "before_tool_call",
+      ((event: unknown, ctx: unknown) =>
+        enforceToolGate(
+          event as Parameters<typeof enforceToolGate>[0],
+          ctx as Parameters<typeof enforceToolGate>[1],
+          { pluginConfig },
+        )) as never,
+      { name: "gsd-oc:enforce-gate" } as never,
+    );
 
     // R0.5 auto-engage (ROBUST, canonical): the `agent:bootstrap` internal hook fires on the
     // embedded/gateway agent path and is backed by the SAME runner the agent consults — unlike
