@@ -77,9 +77,11 @@ export function autoEngageHandler(
   ctx: BeforePromptBuildContext,
   deps: AutoEngageDeps = {},
 ): BeforePromptBuildResult | void {
+  // Fall back to process.cwd() for the codeWS gate too (not just the opt-out check): a missing
+  // ctx.workspaceDir must not block activation when the real cwd is inside a coding workspace (cross-AI F5).
   const cwd = ctx?.workspaceDir ?? process.cwd();
   const engage =
-    isCodingWorkspace(ctx?.workspaceDir) &&
+    isCodingWorkspace(cwd) &&
     classifyIntent(event.prompt).engage &&
     !optedOut({ cwd, pluginConfig: deps.pluginConfig, sessionDisabled: deps.sessionDisabled });
   if (!engage) return;

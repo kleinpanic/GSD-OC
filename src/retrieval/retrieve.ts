@@ -20,6 +20,14 @@ import type { GsdCorpus } from "./types.js";
 
 export type SemanticSearcher = (query: string, topK: number) => Promise<ScoredChunk[]>;
 
+/** Index i → modality name; aligns with the `lists` order [bm25, trigram, semantic?]. */
+const MODALITIES = ["lexical", "trigram", "semantic"] as const;
+
+/** A retrieved doc plus the source modalities that surfaced its top chunk (RET-07 criterion 2). */
+export interface RetrieveResult extends DocResult {
+  modalities: string[];
+}
+
 let lexCache: { corpus: GsdCorpus; bm: Bm25Index; tg: TrigramIndex } | undefined;
 function lexical() {
   if (!lexCache) {
@@ -83,9 +91,10 @@ export interface RetrieveOptions {
   env?: NodeJS.ProcessEnv;
 }
 
-export async function retrieve(query: string, opts: RetrieveOptions = {}): Promise<DocResult[]> {
-  const topK = opts.topK ?? 10;
-  const perMod = opts.perModality ?? 50;
+export async function retrieve(query: string, opts: RetrieveOptions = {}): Promise<RetrieveResult[]> {
+  // Sanitize caller-supplied bounds (cross-AI F4): clamp to sane integer ranges, no NaN/negatives/huge.
+  const topK = Math.max(1, Math.min(Math.trunc(opts.topK ?? 10) || 10, 100));
+  const perMod = Math.max(1, Math.min(Math.trunc(opts.perModality ?? 50) || 50, 200));
   const { corpus, bm, tg } = lexical();
   const lists: ScoredChunk[][] = [bm25Search(bm, query, perMod), trigramSearch(tg, query, perMod)];
   const sem = opts.semantic === undefined ? await defaultSemantic({ env: opts.env }) : opts.semantic;
@@ -97,5 +106,16 @@ export async function retrieve(query: string, opts: RetrieveOptions = {}): Promi
     }
   }
   const weights = opts.weights ?? (lists.length === 3 ? [1, 1, SEMANTIC_WEIGHT] : lists.map(() => 1));
-  return rollup(rrf(lists, 60, weights), corpus).slice(0, topK);
+  // Track which modality(ies) surfaced each chunk so results carry source provenance (RET-07 criterion 2).
+  const modByChunk = new Map<string, Set<string>>();
+  lists.forEach((list, i) => {
+    const mod = MODALITIES[i];
+    for (const h of list) {
+      let s = modByChunk.get(h.chunkId);
+      if (!s) modByChunk.set(h.chunkId, (s = new Set<string>()));
+      s.add(mod);
+    }
+  });
+  const docs = rollup(rrf(lists, 60, weights), corpus).slice(0, topK);
+  return docs.map((d) => ({ ...d, modalities: [...(modByChunk.get(d.topChunkId) ?? [])] }));
 }

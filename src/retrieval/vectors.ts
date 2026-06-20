@@ -38,6 +38,7 @@ export class CosineBackend implements VectorBackend {
   }
   async search(query: number[], topK: number): Promise<ScoredChunk[]> {
     const { dim, chunkIds, matrix } = this.cache;
+    if (query.length !== dim) throw new Error(`query dim ${query.length} != index dim ${dim}`);
     const q = normalizeInto(query);
     const scored: ScoredChunk[] = [];
     for (let r = 0; r < chunkIds.length; r++) {
