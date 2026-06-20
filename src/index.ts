@@ -9,12 +9,14 @@ import { routerMetadataTools } from "./routers/routers.js";
 import { buildWiredRouterTools } from "./routers/route-wire.js";
 import { registerInternalHook, isAgentBootstrapEvent } from "openclaw/plugin-sdk/hook-runtime";
 import { gsdBootstrapHandler, type AgentBootstrapEvent } from "./engage/bootstrap-inject.js";
+import { retrieve } from "./retrieval/retrieve.js";
 
 const PLUGIN_ID = "gsd-oc";
 const PLUGIN_NAME = "GSD-OC";
 const PLUGIN_DESCRIPTION = "GSD lifecycle orchestration for OpenClaw — native, no Claude Code.";
 
 const ORCHESTRATE_TOOL = "gsd_orchestrate";
+const RETRIEVE_TOOL = "gsd_retrieve";
 
 /** TypeBox schema for the orchestrator tool's parameters. */
 const orchestrateParams = Type.Object(
@@ -22,6 +24,17 @@ const orchestrateParams = Type.Object(
     intent: Type.Optional(
       Type.String({ description: "Freeform description of the coding/big-work intent to route through GSD." }),
     ),
+  },
+  { additionalProperties: false },
+);
+
+/** TypeBox schema for the hybrid-retrieval tool's parameters (RET-07). */
+const retrieveParams = Type.Object(
+  {
+    intent: Type.String({
+      description: "Free-text coding/big-work intent; returns the most relevant GSD skills + subagents (long-tail included).",
+    }),
+    topK: Type.Optional(Type.Number({ description: "Max results to return (default 8)." })),
   },
   { additionalProperties: false },
 );
@@ -124,6 +137,23 @@ const entry = definePluginEntry({
       },
     } as never);
 
+    // RET-07: hybrid retrieval tool (gsd_retrieve). registerTool => ZERO Discord slash slots. Surfaces
+    // the long-tail GSD skills/subagents the 6 routers miss (e.g. "the build is flaky" -> gsd-debug) via
+    // semantic (spark+LanceDB) + BM25 + trigram, RRF-fused. Degrades to lexical+trigram if spark/vectors absent.
+    api.registerTool({
+      name: RETRIEVE_TOOL,
+      label: "GSD Retrieve",
+      description:
+        "Retrieve the most relevant GSD skills/subagents for a free-text intent via hybrid semantic+lexical+trigram search. Surfaces long-tail skills the routers miss (e.g. 'the build is flaky' → gsd-debug).",
+      parameters: retrieveParams,
+      async execute(params: { intent?: string; topK?: number }) {
+        const intent = (params?.intent ?? "").trim();
+        if (!intent) return { intent: "", results: [] };
+        const docs = await retrieve(intent, { topK: params?.topK ?? 8 });
+        return { intent, results: docs.map((r) => ({ id: r.docId, kind: r.kind, title: r.title, score: r.score })) };
+      },
+    } as never);
+
     // R0.4 Tier-1: register the 6 namespace router tools (zero Discord slash slots).
     // RTE-01: register the WIRED builder so each router returns the state-aware authoritative
     // next verb (native route('.planning')), not the static substring table (verifier finding).
@@ -169,6 +199,13 @@ Object.defineProperty(entry, toolPluginMetadataSymbol, {
         label: "GSD Orchestrate",
         description:
           "Route a coding/big-work intent through the GSD lifecycle by dispatching the appropriate GSD subagent.",
+        parameters: { type: "object", additionalProperties: false, properties: {} },
+      },
+      {
+        name: RETRIEVE_TOOL,
+        label: "GSD Retrieve",
+        description:
+          "Retrieve relevant GSD skills/subagents for a free-text intent via hybrid retrieval (long-tail aware, 0 slots).",
         parameters: { type: "object", additionalProperties: false, properties: {} },
       },
       ...routerMetadataTools(),
