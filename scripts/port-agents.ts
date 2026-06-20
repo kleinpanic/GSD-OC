@@ -17,6 +17,7 @@ import { homedir } from "node:os";
 import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type AgentDefinition, CC_TO_OPENCLAW_TOOL } from "../src/agents/types.ts";
+import { adaptGsdText } from "./adapt-gsd.ts";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(SCRIPT_DIR, "..");
@@ -82,7 +83,7 @@ export function parseAgentFile(md: string): AgentDefinition {
   const m = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(md);
   if (!m) throw new Error("file has no YAML frontmatter block");
   const fm = parseFrontmatter(m[1]);
-  const prompt = m[2].replace(/^\n+/, "");
+  const prompt = adaptGsdText(m[2].replace(/^\n+/, "")); // PORT-01: agnostic adaptation
 
   if (!fm.name) throw new Error("frontmatter missing `name`");
   if (!fm.effort) throw new Error(`agent ${fm.name}: frontmatter missing \`effort\``);
