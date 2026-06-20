@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { makeSubagentDispatcher, VERB_TO_SUBAGENT, executePath } from "../src/orchestrate/execute-path.js";
 import { selectPath } from "../src/orchestrate/select-path.js";
 import type { RunSubagentApi } from "../src/dispatch/run-subagent.js";
+import entry from "../src/index.js";
 
 /** Mock subagent runtime: records run() calls, returns ok with canned text. */
 function mockApi(status: "ok" | "error" = "ok") {
@@ -70,4 +71,31 @@ test("a failed subagent run halts the driven path (enforced failure)", async () 
   assert.equal(r.reason, "failure");
   // first mapped step is map-codebase → it fails → halt there
   assert.equal(r.haltedAt, "map-codebase");
+});
+
+test("gsd_orchestrate drive:true reaches dispatch via the register(api) closure runtime (review CRITICAL-1)", async () => {
+  // Capture the registered gsd_orchestrate tool with a mock api that carries runtime.subagent. Proves the
+  // drive path resolves the runtime from the CLOSURE api (not the unreliable execute ctx arg) and executes.
+  let tool: { execute: (...a: unknown[]) => Promise<{ executed?: unknown[]; completed?: boolean }> } | undefined;
+  const runs: string[] = [];
+  const api = {
+    runtime: {
+      subagent: {
+        async run(p: { sessionKey: string }) { runs.push(p.sessionKey); return { runId: "r" }; },
+        async waitForRun() { return { status: "ok" }; },
+        async getSessionMessages() { return { messages: [{ role: "assistant", content: "ok" }] }; },
+        async deleteSession() {},
+      },
+    },
+    registerService() {},
+    registerTool(t: { name: string }) { if (t.name === "gsd_orchestrate") tool = t as never; },
+    registerCommand() {}, registerHook() {}, registerInteractiveHandler() {},
+    session: { state: { registerSessionExtension() {} } },
+  };
+  entry.register(api as never);
+  // No ctx 5th-arg at all → drive must still work via the closure api.
+  const r = await tool!.execute("call", { intent: "rename a config key", drive: true, autoGates: true });
+  assert.ok(Array.isArray(r.executed), "drive reached executePath (executed array present)");
+  assert.equal(r.completed, true, "all backbone steps dispatched to completion");
+  assert.ok(runs.length >= 5, `dispatched the mapped subagents (got ${runs.length})`);
 });
