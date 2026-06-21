@@ -56,6 +56,7 @@
       "gsd_retrieve",
       "gsd_settings",
       "gsd_state",
+      "gsd_command",
       "gsd_workflow",
       "gsd_project",
       "gsd_quality",

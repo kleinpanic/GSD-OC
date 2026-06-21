@@ -15,6 +15,9 @@ import { selectPath } from "./orchestrate/select-path.js";
 import { readGsdConfig, bootstrapGsdConfig } from "./engine/config.js";
 import { enforceToolGate, enforceSpawnPersona, gsdProjectRoot } from "./hooks/enforce-gate.js";
 import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
+import { suggestFlags } from "./orchestrate/flags.js";
+import { VERB_TO_SUBAGENT } from "./orchestrate/execute-path.js";
+import { resolveAgentOptional } from "./agents/index.js";
 import { executePath, makeSubagentDispatcher } from "./orchestrate/execute-path.js";
 
 const PLUGIN_ID = "gsd-oc";
@@ -25,6 +28,17 @@ const ORCHESTRATE_TOOL = "gsd_orchestrate";
 const RETRIEVE_TOOL = "gsd_retrieve";
 const SETTINGS_TOOL = "gsd_settings";
 const STATE_TOOL = "gsd_state";
+const COMMAND_TOOL = "gsd_command";
+
+/** TypeBox schema for gsd_command — invoke ANY individual GSD command/skill by name, with intent-driven flags. */
+const commandParams = Type.Object(
+  {
+    command: Type.String({ description: "The GSD command/skill/workflow to run (e.g. 'code-review', 'debug', 'docs-update', 'secure-phase', 'verify-work'). Bare name, no leading slash." }),
+    flags: Type.Optional(Type.String({ description: "Explicit flags/args (e.g. '--all --forensic'). Merged with flags inferred from `intent`." })),
+    intent: Type.Optional(Type.String({ description: "Free-text intent; used to infer flags (e.g. 'review everything' → --all) and to retrieve the command's guidance." })),
+  },
+  { additionalProperties: false },
+);
 
 /** TypeBox schema for the gsd_state mutation tool (ENG-WRITE-01). */
 const stateParams = Type.Object(
@@ -310,6 +324,47 @@ const entry = definePluginEntry({
       },
     } as never);
 
+    // gsd_command — invoke ANY individual GSD command/skill/workflow by name (not just the 11 backbone verbs),
+    // with flags inferred from intent (flags-as-a-layer-of-intent). Opens the full ~88-workflow / 67-skill GSD
+    // surface to the agent without a Discord slot. Resolves the command → subagent + flags + workflow guidance.
+    api.registerTool({
+      name: COMMAND_TOOL,
+      label: "GSD Command",
+      description:
+        "Run a specific GSD command/skill by name (e.g. code-review, debug, secure-phase, docs-update, verify-work) with flags. Flags are inferred from `intent` (e.g. 'review everything' → --all, 'deep audit' → --forensic) and merged with explicit `flags`. Returns the resolving subagent, the merged flags, and the workflow guidance to execute.",
+      parameters: commandParams,
+      async execute(_toolCallId: string, args: { command?: string; flags?: string; intent?: string }, _signal?: unknown) {
+        const command = (args?.command ?? "").trim().replace(/^\/+/, "").replace(/^gsd-/, "");
+        if (!command) return { ok: false, error: "command is required" };
+        const subagent =
+          VERB_TO_SUBAGENT[command] ??
+          (resolveAgentOptional(`gsd-${command}`) ? `gsd-${command}` : resolveAgentOptional(command) ? command : null);
+        const inferred = suggestFlags(args?.intent ?? command, command);
+        const explicit = (args?.flags ?? "").split(/\s+/).filter(Boolean);
+        const flags = [...new Set([...explicit, ...inferred])];
+        let workflow: string | null = null;
+        try {
+          const hits = await retrieve(`${command} ${args?.intent ?? ""}`.trim(), { topK: 4 });
+          workflow =
+            hits.find((h) => h.docId.startsWith("workflow:") && h.docId.toLowerCase().includes(command.toLowerCase()))?.docId ??
+            hits.find((h) => h.docId.startsWith("workflow:"))?.docId ??
+            null;
+        } catch {
+          /* retrieval degraded — still return the resolution */
+        }
+        return {
+          ok: true,
+          command,
+          subagent,
+          flags,
+          workflow,
+          how_to_run: subagent
+            ? `Dispatch the '${subagent}' subagent (your sessions_spawn) with task: "${command}${flags.length ? " " + flags.join(" ") : ""}". The GSD persona is auto-injected by the enforce-gate.`
+            : `No mapped subagent — retrieve the workflow '${workflow ?? `workflow:${command}`}' and execute its steps with the flags.`,
+        };
+      },
+    } as never);
+
     // ENG-WRITE-01: gsd_state — the WRITE half of the engine. Records GSD state advances (status/progress/
     // decisions/blockers) to .planning/STATE.md atomically, so route() runs on LIVE state, not a stale
     // snapshot. Parity with gsd-tools state.* (native, lock-protected). 0 Discord slots.
@@ -447,6 +502,12 @@ Object.defineProperty(entry, toolPluginMetadataSymbol, {
         name: SETTINGS_TOOL,
         label: "GSD Settings",
         description: "Inspect/bootstrap the project's GSD configuration (workflow toggles, model profile) — 0 slots.",
+        parameters: { type: "object", additionalProperties: false, properties: {} },
+      },
+      {
+        name: COMMAND_TOOL,
+        label: "GSD Command",
+        description: "Invoke any individual GSD command/skill by name with intent-inferred flags — 0 slots.",
         parameters: { type: "object", additionalProperties: false, properties: {} },
       },
       {
