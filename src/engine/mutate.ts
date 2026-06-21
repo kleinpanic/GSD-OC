@@ -45,16 +45,17 @@ function withEol(content: string): [string, (s: string) => string] {
 export function setFrontmatterField(content: string, key: string, value: string): string {
   const [lf, eol] = withEol(content);
   content = lf;
-  // BLOCKER: tolerate a leading BOM / blank lines before the opening `---` — otherwise a STATE.md that isn't
-  // byte-0-anchored (hand-edited blank top line, BOM) is treated as having NO frontmatter and a SECOND block gets
-  // prepended, orphaning the real one. Match the first fenced block allowing leading whitespace/BOM.
-  const fm = /^[﻿ \t\r\n]*---\n([\s\S]*?)\n---/.exec(content);
+  // Tolerate a leading BOM / blank lines before the opening `---` (a hand-edited blank top line, BOM). Capture the
+  // OPEN and CLOSE fences as groups so we can replace the whole matched region by index — `content.replace(fm[1])`
+  // breaks when the inner block is EMPTY (`---\n\n---` → fm[1]==="" matches at index 0 and inserts BEFORE the fence,
+  // corrupting the file on every state write). Replacing fm[0] (always non-empty) is splice-safe.
+  const fm = /^([﻿ \t\r\n]*---\n)([\s\S]*?)(\n---)/.exec(content);
   const quoted = scalar(value);
   // function replacers everywhere — a raw replacement string lets `$`-sequences in the value corrupt it (CR-1).
   if (!fm) {
     return eol(`---\n${key}: ${quoted}\n---\n\n${content}`);
   }
-  const block = fm[1];
+  const [open, block, close] = [fm[1], fm[2], fm[3]];
   const keyRe = new RegExp(`^${escapeRe(key)}:`);
   // REGRESSION FIX (1a): rewrite the key by LINE FILTERING, not regex-empty-then-collapse — the old
   // `.replace(/\n\n+/g,"\n")` destroyed EVERY intentional blank line in the frontmatter on any field update.
@@ -72,8 +73,10 @@ export function setFrontmatterField(content: string, key: string, value: string)
         })
         .map((ln) => (keyRe.test(ln) ? `${key}: ${quoted}` : ln))
         .join("\n")
-    : `${block}\n${key}: ${quoted}`;
-  return eol(content.replace(fm[1], () => newBlock));
+    : block === ""
+      ? `${key}: ${quoted}` // empty frontmatter block — the new key IS the block (no leading blank line)
+      : `${block}\n${key}: ${quoted}`;
+  return eol(content.replace(fm[0], () => open + newBlock + close));
 }
 
 /** Merge child fields into the nested `progress:` frontmatter block. Updates direct scalar children in place
@@ -82,16 +85,18 @@ export function setFrontmatterField(content: string, key: string, value: string)
 export function setProgressFields(content: string, fields: Record<string, number>): string {
   const [lf, eol] = withEol(content); // WR-02 match on LF, WR-01 restore original ending on write
   content = lf;
-  const fm = /^---\n([\s\S]*?)\n---/.exec(content);
+  // #2: same BOM/blank-tolerant fence-capturing anchor as setFrontmatterField — a byte-0-anchored `^---\n` missed a
+  // BOM/blank-prefixed STATE.md and silently dropped the progress payload while stamp() updated the timestamp.
+  const fm = /^([﻿ \t\r\n]*---\n)([\s\S]*?)(\n---)/.exec(content);
   if (!fm) return eol(content);
-  const block = fm[1];
+  const [open, block, close] = [fm[1], fm[2], fm[3]];
   // Array-based so the empty-block (WR-01) and progress-is-last-key (WR-03) cases can't duplicate the key
   // or inject a stray blank line. Find the `progress:` line, consume its indented children, rebuild in place.
   const lines = block.split("\n");
   const pIdx = lines.findIndex((l) => /^progress:[ \t]*$/.test(l));
   if (pIdx === -1) {
     const rendered = ["progress:", ...Object.entries(fields).map(([k, v]) => `  ${k}: ${v}`)];
-    return eol(content.replace(fm[1], () => [...lines, ...rendered].join("\n")));
+    return eol(content.replace(fm[0], () => open + [...lines, ...rendered].join("\n") + close));
   }
   let end = pIdx + 1;
   while (end < lines.length && /^[ \t]+/.test(lines[end])) end++;
@@ -109,7 +114,7 @@ export function setProgressFields(content: string, fields: Record<string, number
   });
   for (const k of remaining) merged.push(`${baseIndent}${k}: ${fields[k]}`);
   const newBlock = [...lines.slice(0, pIdx), "progress:", ...merged, ...lines.slice(end)].join("\n");
-  return eol(content.replace(fm[1], () => newBlock));
+  return eol(content.replace(fm[0], () => open + newBlock + close));
 }
 
 /** Append a line at the END of a `## <section>` body block (creates the section if absent). */
@@ -126,17 +131,21 @@ export function appendUnderSection(content: string, section: string, line: strin
   // ``` fence is body, not a boundary — WR-04). Then append the entry after the section's last non-blank line.
   let inFence = false;
   let end = lines.length;
+  let firstHeadingInFence = -1; // #3: fallback if the fence is never closed (malformed input)
   for (let i = hIdx + 1; i < lines.length; i++) {
     const t = lines[i].trim();
     if (t.startsWith("```") || t.startsWith("~~~")) {
       inFence = !inFence;
       continue;
     }
-    if (!inFence && /^## /.test(lines[i])) {
-      end = i;
-      break;
+    if (/^## /.test(lines[i])) {
+      if (!inFence) { end = i; break; }
+      if (firstHeadingInFence === -1) firstHeadingInFence = i; // remember in case the fence is unterminated
     }
   }
+  // #3: an UNTERMINATED code fence left `inFence` true to EOF, so the scan would swallow the real next `## `
+  // section (appending into the wrong section at file end). Treat the fence as closed at the first heading we saw.
+  if (inFence && end === lines.length && firstHeadingInFence !== -1) end = firstHeadingInFence;
   let last = end;
   while (last > hIdx + 1 && lines[last - 1].trim() === "") last--; // trim trailing blanks within the section
   return eol([...lines.slice(0, last), `- ${line}`, ...lines.slice(last)].join("\n"));

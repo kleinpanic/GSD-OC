@@ -159,3 +159,20 @@ test("setFrontmatterField drops a duplicate key with NO stray blank line", () =>
   assert.equal((out.match(/^status:/gm) || []).length, 1, "exactly one status line");
   assert.match(out, /status: three\nfoo: bar/, "no blank gap where the dup was removed");
 });
+
+test("BLOCKER #1: an EMPTY frontmatter block is not corrupted on a field set", () => {
+  const out = setFrontmatterField("---\n\n---\nbody\n", "status", "planning");
+  assert.ok(out.startsWith("---\n"), "opening fence intact (was inserting before it)");
+  assert.match(out, /^---\nstatus: planning\n---\nbody/, "key written inside the block, body preserved");
+});
+
+test("BLOCKER #2: setProgressFields applies under a BOM-prefixed frontmatter (was silently dropped)", () => {
+  const out = setProgressFields("﻿---\nstatus: x\n---\nbody\n", { total: 3, done: 1 });
+  assert.match(out, /progress:\n {2}total: 3\n {2}done: 1/, "progress payload written, not silently dropped");
+});
+
+test("BLOCKER #3: appendUnderSection with an UNTERMINATED code fence does not swallow the next section", () => {
+  const s = "## Decisions\n\n```\n## not-a-heading (unclosed fence)\n\n## Blockers\n\n- old\n";
+  const out = appendUnderSection(s, "Decisions", "new decision");
+  assert.ok(out.indexOf("new decision") < out.indexOf("## Blockers"), "entry lands in Decisions, not after Blockers");
+});
