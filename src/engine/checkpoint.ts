@@ -42,6 +42,9 @@ export function buildCheckpoint(
   prompt: string,
   opts: { options?: GateOption[]; discord?: boolean } = {},
 ): GateRequest {
+  // BL-S1: `type` reaches here from a too-loose tool schema (Type.String) — an unknown value (e.g. "approve")
+  // has no DEFAULTS entry, so `.map` on undefined would crash. Reject it with a clear, caught error instead.
+  if (!(type in DEFAULTS)) throw new Error(`unknown checkpoint type: ${JSON.stringify(type)} (use decision | human-verify | human-action)`);
   const options = (opts.options && opts.options.length ? opts.options : DEFAULTS[type]).map((o) => ({
     id: String(o.id).toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 32) || "opt",
     label: o.label,

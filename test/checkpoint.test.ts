@@ -74,3 +74,8 @@ test("sessionParams schema accepts checkpoint's options arg (host would reject o
   assert.ok(Value.Check(sessionSchema as never, { op: "checkpoint", text: "pick", type: "decision", options: [{ id: "a", label: "A" }] }), "checkpoint+options validates");
   assert.ok(Value.Check(sessionSchema as never, { op: "checkpoint-reply", text: "1", options: [{ id: "a", label: "A" }] }), "checkpoint-reply validates");
 });
+
+test("BL-S1: buildCheckpoint rejects an unknown type with a clear error (not a .map crash)", () => {
+  assert.throws(() => buildCheckpoint("approve" as never, "x"), /unknown checkpoint type/);
+  // and the gsd_session checkpoint op catches it → {ok:false}, never an uncaught throw
+});

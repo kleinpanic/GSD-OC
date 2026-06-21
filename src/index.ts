@@ -408,20 +408,26 @@ const entry = definePluginEntry({
       // OpenClaw invokes registerTool execute as (toolCallId, args, signal, onUpdate) — args is the 2nd
       // param (verified against the bundled file-transfer tool + SDK runner). Reading args, NOT the callId.
       async execute(_toolCallId: string, args: { intent?: string; topK?: number }, _signal?: unknown) {
-        const intent = (args?.intent ?? "").trim();
-        const semantic = embedAvailable(process.env); // false → lexical+trigram only (degraded)
-        if (!intent) return { intent: "", semantic, results: [] };
-        const docs = await retrieve(intent, { topK: args?.topK ?? 8 });
-        // WR-01: semantic was CONFIGURED (embedAvailable) but if no result carries the "semantic" modality it
-        // silently fell back to lexical+trigram (spark unreachable) — surface that so the ranking isn't trusted
-        // as full-hybrid when it's degraded.
-        const degraded = semantic && !docs.some((r) => (r.modalities ?? []).includes("semantic"));
-        return {
-          intent,
-          semantic,
-          degraded,
-          results: docs.map((r) => ({ id: r.docId, kind: r.kind, title: r.title, score: r.score, modality: r.modalities })),
-        };
+        // BL-01: wrap like every sibling tool — retrieve() → loadCorpus() THROWS if the (gitignored) corpus
+        // artifact wasn't bundled into dist/, which would otherwise be an uncaught rejection that aborts the turn.
+        try {
+          const intent = (args?.intent ?? "").trim();
+          const semantic = embedAvailable(process.env); // false → lexical+trigram only (degraded)
+          if (!intent) return { intent: "", semantic, results: [] };
+          const docs = await retrieve(intent, { topK: args?.topK ?? 8 });
+          // WR-01: semantic was CONFIGURED (embedAvailable) but if no result carries the "semantic" modality it
+          // silently fell back to lexical+trigram (spark unreachable) — surface that so the ranking isn't trusted
+          // as full-hybrid when it's degraded.
+          const degraded = semantic && !docs.some((r) => (r.modalities ?? []).includes("semantic"));
+          return {
+            intent,
+            semantic,
+            degraded,
+            results: docs.map((r) => ({ id: r.docId, kind: r.kind, title: r.title, score: r.score, modality: r.modalities })),
+          };
+        } catch (e) {
+          return { intent: args?.intent ?? "", error: e instanceof Error ? e.message : String(e), results: [] };
+        }
       },
     } as never);
 
@@ -684,7 +690,7 @@ const entry = definePluginEntry({
     api.registerTool({
       name: SESSION_TOOL,
       label: "GSD Session",
-      description: "Session lifecycle (op: pause | resume | thread | threads | close-thread | capture). pause writes the .continue-here.md checkpoint + paused_at so route() halts; resume clears it and returns the handoff.",
+      description: "Session lifecycle (op: pause | resume | thread | threads | close-thread | capture | checkpoint | checkpoint-reply). pause writes the .continue-here.md checkpoint + paused_at so route() halts; resume clears it; checkpoint builds a decision/human-verify/human-action gate (Discord or text); checkpoint-reply routes a human reply back to an option.",
       parameters: sessionParams,
       async execute(_id: string, args: { op?: string; reason?: string; next_step?: string; name?: string; content?: string; text?: string; type?: string; options?: unknown }, _sig?: unknown) {
         const root = gsdProjectRoot(process.cwd());
