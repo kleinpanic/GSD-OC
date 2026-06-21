@@ -206,6 +206,7 @@ const entry = definePluginEntry({
         _onUpdate?: unknown,
         context?: { api?: unknown },
       ) {
+       try {
         const intent = (args?.intent ?? "").trim();
         const state = await readState(".planning");
         const base = {
@@ -255,6 +256,11 @@ const entry = definePluginEntry({
           };
         }
         return planned;
+       } catch (e) {
+        // Robustness: a retrieve/executePath/readState rejection returns a clean envelope instead of an
+        // unhandled tool-promise rejection (the agent gets a usable error, the turn doesn't abort).
+        return { engaged: true, error: e instanceof Error ? e.message : String(e) };
+       }
       },
     } as never);
 
