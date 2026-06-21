@@ -24,3 +24,19 @@ test("flags-as-intent: combines multiple", () => {
   const f = suggestFlags("autonomously review all phases forensically");
   assert.ok(f.includes("--all") && f.includes("--forensic") && f.includes("--auto"));
 });
+
+test("flags-as-intent: the full upstream flag set is covered", () => {
+  assert.ok(suggestFlags("use TDD", "plan-phase").includes("--tdd"));
+  assert.ok(suggestFlags("just an MVP", "plan-phase").includes("--mvp"));
+  assert.ok(suggestFlags("surface the assumptions", "discuss-phase").includes("--assumptions"));
+  assert.ok(suggestFlags("check coverage gaps", "plan-phase").includes("--gaps"));
+  assert.ok(suggestFlags("from the PRD spec file", "plan-phase").includes("--prd"));
+  assert.ok(suggestFlags("execute wave 2", "execute-phase").includes("--wave 2"));
+  assert.ok(suggestFlags("walk me through it step by step", "execute-phase").includes("--interactive"));
+  assert.ok(suggestFlags("ship as a draft", "ship").includes("--draft"));
+  assert.ok(suggestFlags("repair the state", "next").includes("--repair"));
+  assert.ok(suggestFlags("backfill the missing summaries").includes("--backfill"));
+  assert.ok(suggestFlags("bounce the plan", "plan-phase").includes("--bounce"));
+  assert.ok(suggestFlags("power mode", "discuss-phase").includes("--power"));
+  assert.ok(suggestFlags("in batch", "discuss-phase").includes("--batch"));
+});
