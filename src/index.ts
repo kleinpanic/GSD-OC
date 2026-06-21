@@ -15,6 +15,7 @@ import { selectPath } from "./orchestrate/select-path.js";
 import { readGsdConfig, bootstrapGsdConfig } from "./engine/config.js";
 import { enforceToolGate, enforceSpawnPersona, gsdProjectRoot } from "./hooks/enforce-gate.js";
 import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
+import { addPhase, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone } from "./engine/lifecycle.js";
 import { suggestFlags } from "./orchestrate/flags.js";
 import { VERB_TO_SUBAGENT } from "./orchestrate/execute-path.js";
 import { resolveAgentOptional } from "./agents/index.js";
@@ -55,7 +56,7 @@ const commandParams = Type.Object(
 /** TypeBox schema for the gsd_state mutation tool (ENG-WRITE-01). */
 const stateParams = Type.Object(
   {
-    op: Type.String({ description: "Mutation: 'set-status' | 'record-progress' | 'add-decision' | 'add-blocker'." }),
+    op: Type.String({ description: "set-status | record-progress | add-decision | add-blocker | add-phase | scaffold-phase | update-plan-progress | complete-phase | complete-requirement | complete-milestone" }),
     status: Type.Optional(Type.String({ description: "For set-status (e.g. planning|executing|complete|error)." })),
     decision: Type.Optional(Type.String({ description: "For add-decision: the decision text." })),
     blocker: Type.Optional(Type.String({ description: "For add-blocker: the blocker text." })),
@@ -63,6 +64,13 @@ const stateParams = Type.Object(
     completed_plans: Type.Optional(Type.Number()),
     total_phases: Type.Optional(Type.Number()),
     completed_phases: Type.Optional(Type.Number()),
+    name: Type.Optional(Type.String({ description: "For add-phase: the phase name." })),
+    goal: Type.Optional(Type.String({ description: "For add-phase: the phase goal." })),
+    phase: Type.Optional(Type.String({ description: "Phase number for scaffold-phase/update-plan-progress/complete-phase." })),
+    plans: Type.Optional(Type.Number({ description: "For update-plan-progress: total plans." })),
+    done: Type.Optional(Type.Number({ description: "For update-plan-progress: completed plans." })),
+    req: Type.Optional(Type.String({ description: "For complete-requirement: the REQ id (e.g. RET-01)." })),
+    version: Type.Optional(Type.String({ description: "For complete-milestone: the milestone version (e.g. v1.1)." })),
   },
   { additionalProperties: false },
 );
@@ -386,7 +394,7 @@ const entry = definePluginEntry({
       description:
         "Advance GSD project state in .planning/STATE.md (op: set-status | record-progress | add-decision | add-blocker). Call this as GSD work completes so the route engine sees live state.",
       parameters: stateParams,
-      async execute(_toolCallId: string, args: { op?: string; status?: string; decision?: string; blocker?: string; total_plans?: number; completed_plans?: number; total_phases?: number; completed_phases?: number }, _signal?: unknown) {
+      async execute(_toolCallId: string, args: { op?: string; status?: string; decision?: string; blocker?: string; total_plans?: number; completed_plans?: number; total_phases?: number; completed_phases?: number; name?: string; goal?: string; phase?: string; plans?: number; done?: number; req?: string; version?: string }, _signal?: unknown) {
         // Best-effort project resolution: walk up from cwd to a .planning root. The tool execute context
         // carries NO workspaceDir (SDK limit), so when cwd isn't the workspace (gateway home) this falls
         // back to cwd-relative .planning. The robust state-advance channel is agent_end (workspaceDir) — SDK-03.
@@ -406,6 +414,28 @@ const entry = definePluginEntry({
             case "add-blocker":
               if (!args.blocker) return { ok: false, error: "add-blocker requires non-empty blocker text" };
               addBlocker(dir, args.blocker); break;
+            // OCT-W1 write-engine ops (phase/roadmap/milestone/requirements CRUD):
+            case "add-phase": {
+              if (!args.name) return { ok: false, error: "add-phase requires a name" };
+              const ph = addPhase(dir, args.name, { goal: args.goal });
+              return { ok: true, op: args.op, phase: ph.number, planningDir: dir };
+            }
+            case "scaffold-phase": {
+              if (!args.phase || !args.name) return { ok: false, error: "scaffold-phase requires phase + name" };
+              return { ok: true, op: args.op, dir: scaffoldPhaseDir(dir, args.phase, args.name) };
+            }
+            case "update-plan-progress":
+              if (!args.phase || args.plans == null) return { ok: false, error: "update-plan-progress requires phase + plans" };
+              return { ok: updatePlanProgress(dir, args.phase, args.plans, args.done), op: args.op };
+            case "complete-phase":
+              if (!args.phase) return { ok: false, error: "complete-phase requires phase" };
+              return { ok: markPhaseComplete(dir, args.phase), op: args.op };
+            case "complete-requirement":
+              if (!args.req) return { ok: false, error: "complete-requirement requires req" };
+              return { ok: markRequirementComplete(dir, args.req), op: args.op };
+            case "complete-milestone":
+              if (!args.version) return { ok: false, error: "complete-milestone requires version" };
+              return { ok: true, op: args.op, ...completeMilestone(dir, args.version) };
             default: return { ok: false, error: `unknown op: ${args?.op}` };
           }
           return { ok: true, op: args.op, planningDir: dir };
