@@ -44,7 +44,9 @@ export function comparePhaseNum(a: string, b: string): number {
   const sb = String(b).replace(/^[A-Z]{1,6}-(?=\d)/i, "");
   const pa = sa.match(/^(\d+)([A-Z])?((?:\.\d+)*)/i);
   const pb = sb.match(/^(\d+)([A-Z])?((?:\.\d+)*)/i);
-  if (!pa || !pb) return String(a).localeCompare(String(b));
+  // LOW-04: deterministic, locale-independent ordering (localeCompare varies by locale and can produce
+  // intransitive orderings when mixed with the numeric subtraction below).
+  if (!pa || !pb) return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
 
   const intDiff = parseInt(pa[1], 10) - parseInt(pb[1], 10);
   if (intDiff !== 0) return intDiff;

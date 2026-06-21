@@ -72,7 +72,24 @@ export function acquireStateLock(statePath: string, clock: Clock = realClock): s
         lockPath,
         fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY,
       );
-      fs.writeSync(fd, String(process.pid));
+      // LOW-01: if writeSync throws (ENOSPC/EIO) after a successful O_EXCL create, the fd must still be
+      // closed and the orphan lockfile removed — otherwise the fd leaks and the empty lock blocks the next
+      // writer until the stale threshold.
+      try {
+        fs.writeSync(fd, String(process.pid));
+      } catch (writeErr) {
+        try {
+          fs.closeSync(fd);
+        } catch {
+          /* already closed */
+        }
+        try {
+          fs.unlinkSync(lockPath);
+        } catch {
+          /* best effort */
+        }
+        throw writeErr;
+      }
       fs.closeSync(fd);
       return lockPath;
     } catch (err) {

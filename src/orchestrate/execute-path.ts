@@ -27,14 +27,28 @@ export const VERB_TO_SUBAGENT: Record<string, string> = {
 };
 
 /**
+ * Verbs that intentionally have NO subagent — interactive gates (discuss/ship) or skill-only steps
+ * (spike/graphify). A no-op success is correct ONLY for these. Any OTHER unmapped verb is drift (a typo
+ * or a renamed verb in selectPath) and must FAIL CLOSED, not silently pass — otherwise a mis-spelled
+ * "code-review"→"review" would report success while the enforcement step never ran (CR-01).
+ */
+export const SKILL_OR_GATE_VERBS = new Set(["discuss", "ship", "spike", "graphify", "complete-milestone"]);
+
+/**
  * A StepDispatcher that drives each step via the live OpenClaw subagent runtime. Steps with a mapped
- * subagent are dispatched (runSubagent); unmapped steps succeed as no-ops so the path advances. The
- * subagent's run status becomes the step outcome (ok/failure).
+ * subagent are dispatched (runSubagent); the known skill/gate verbs succeed as no-ops so the path advances
+ * (their halting is governed by the static `step.gate` flag in executePath). The subagent's run status
+ * becomes the step outcome (ok/failure).
  */
 export function makeSubagentDispatcher(api: RunSubagentApi, intent: string, baseAgentId?: string): StepDispatcher {
   return async (step: PathStep): Promise<StepOutcome> => {
     const agentId = VERB_TO_SUBAGENT[step.verb];
-    if (!agentId) return { ok: true, output: `${step.verb}: no subagent (skill/gate step)` };
+    if (!agentId) {
+      if (!SKILL_OR_GATE_VERBS.has(step.verb)) {
+        return { ok: false, output: `unknown verb "${step.verb}" — refusing to no-op (would skip an enforcement step)` };
+      }
+      return { ok: true, output: `${step.verb}: no subagent (skill/gate step)` };
+    }
     const msg = `GSD ${step.verb} step for intent: ${intent}. ${step.reason}`;
     // baseAgentId hosts the GSD persona as a sub-lane (allowlist requirement — see runSubagent).
     const res = await runSubagent(api, agentId, msg, baseAgentId ? { baseAgentId } : {});

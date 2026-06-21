@@ -129,3 +129,14 @@ test("WR-04: appendUnderSection does not append inside a code fence", () => {
   assert.match(out, /```\n- b/, "appended after the fence, fence intact");
   assert.equal((out.match(/```/g) || []).length, 2, "both fence delimiters preserved");
 });
+
+test("WR-01: a CRLF file keeps CRLF endings after a mutation (not rewritten to LF)", () => {
+  const crlf = "---\r\nstatus: planning\r\nprogress:\r\n  total_plans: 4\r\n  completed_plans: 1\r\n---\r\n# State\r\n";
+  const out = setProgressFields(crlf, { completed_plans: 3 });
+  assert.match(out, /completed_plans: 3/, "update applied");
+  assert.ok(/\r\n/.test(out), "CRLF endings preserved");
+  assert.ok(!/[^\r]\n/.test(out), "no bare LF introduced");
+  // an LF file stays LF
+  const lf = setProgressFields("---\nprogress:\n  total_plans: 2\n---\n", { total_plans: 5 });
+  assert.ok(!/\r/.test(lf), "LF file stays LF");
+});

@@ -20,12 +20,14 @@ export function hasGsdOffMarker(cwd: string, home = homedir()): boolean {
   let cur = resolve(cwd);
   const stopAt = resolve(home);
   for (;;) {
-    if (existsSync(join(cur, ".gsd-off")) || existsSync(join(cur, ".planning", ".gsd-off"))) {
+    const parent = dirname(cur);
+    // L-1/IN-01: a marker at the FILESYSTEM ROOT (`/.gsd-off`) is box-wide and out of scope — never honor it,
+    // for ANY cwd (inside or outside home). This is consistent regardless of where the project lives.
+    if (parent !== cur && (existsSync(join(cur, ".gsd-off")) || existsSync(join(cur, ".planning", ".gsd-off")))) {
       return true;
     }
-    const parent = dirname(cur);
-    // L-1: bound the walk at the user's home dir (inclusive). A `.gsd-off` ABOVE home (e.g. `/.gsd-off`)
-    // is out of GSD's scope — it must not silently disable engage for every user/project on the box.
+    // Bound the walk at the user's home dir (inclusive) when the cwd is under it — a marker ABOVE home is
+    // out of scope too. For an outside-home cwd the root guard above already neutralizes the box-wide case.
     if (parent === cur || cur === stopAt) return false;
     cur = parent;
   }

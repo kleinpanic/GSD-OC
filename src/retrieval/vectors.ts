@@ -29,6 +29,14 @@ export function normalizeInto(v: number[] | Float32Array): Float32Array {
   return out;
 }
 
+/** MED-02: a zero-magnitude query vector cosine-scores 0 against everything → the ranking collapses to the
+ *  chunkId tiebreak (alphabetical garbage). Detect it at the query boundary so search returns no semantic
+ *  hits (fusion falls back to lexical+trigram) rather than emitting plausible-looking nonsense. */
+function isZeroVector(v: number[]): boolean {
+  for (let i = 0; i < v.length; i++) if (v[i] !== 0) return false;
+  return true;
+}
+
 export interface VectorBackend {
   search(query: number[], topK: number): Promise<ScoredChunk[]>;
 }
@@ -42,6 +50,7 @@ export class CosineBackend implements VectorBackend {
   async search(query: number[], topK: number): Promise<ScoredChunk[]> {
     const { dim, chunkIds, matrix } = this.cache;
     if (query.length !== dim) throw new Error(`query dim ${query.length} != index dim ${dim}`);
+    if (isZeroVector(query)) return []; // MED-02: no garbage ranking from a degenerate query
     const q = normalizeInto(query);
     const scored: ScoredChunk[] = [];
     for (let r = 0; r < chunkIds.length; r++) {
@@ -66,6 +75,7 @@ export class LanceBackend implements VectorBackend {
     return new LanceBackend(await db.openTable(table));
   }
   async search(query: number[], topK: number): Promise<ScoredChunk[]> {
+    if (isZeroVector(query)) return []; // MED-02
     const q = Array.from(normalizeInto(query));
     const rows = (await this.tbl.search(q).limit(topK).toArray()) as { chunkId?: string; id?: string; _distance?: number }[];
     return rows.map((r) => ({ chunkId: (r.chunkId ?? r.id) as string, score: -(r._distance ?? 0) }));
@@ -120,8 +130,12 @@ export function loadVectorCache(paths: { bin: string; index: string } = vectorAr
   if (!existsSync(paths.bin) || !existsSync(paths.index)) return null;
   const idx = JSON.parse(readFileSync(paths.index, "utf8")) as { dim: number; chunkIds: string[] };
   const buf = readFileSync(paths.bin);
-  const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-  const matrix = new Float32Array(ab);
+  // MED-01: a truncated/corrupt .bin must return null, not crash. new Float32Array throws on a byteLength
+  // not divisible by 4; guard that, and reject a degenerate (dim<=0 / non-array) index that would otherwise
+  // yield a 0-length backend that throws confusingly at query time.
+  if (buf.byteLength % 4 !== 0) return null;
+  if (!(idx.dim > 0) || !Array.isArray(idx.chunkIds)) return null;
+  const matrix = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4); // view, no copy, alignment-safe
   if (matrix.length !== idx.dim * idx.chunkIds.length) return null; // truncated/mismatched artifact (e.g. partial copy)
   return { dim: idx.dim, chunkIds: idx.chunkIds, matrix };
 }

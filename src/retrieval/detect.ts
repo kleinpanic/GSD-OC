@@ -116,6 +116,10 @@ export function safeList(root: string, recursive: boolean): string[] {
   const out: string[] = [];
   for (const e of ents) {
     if (isDenied(e.name)) continue;
+    // MED-04: never follow symlinks — a `workflows/x.md` symlink pointing at `~/.ssh/id_rsa` would otherwise
+    // bake a secret into the committed corpus. withFileTypes already reports symlinks as neither file nor dir,
+    // so they fall through; this explicit skip documents the containment and guards DT_UNKNOWN fallbacks.
+    if (e.isSymbolicLink()) continue;
     const full = join(root, e.name);
     if (e.isDirectory()) {
       if (recursive) out.push(...safeList(full, true));
