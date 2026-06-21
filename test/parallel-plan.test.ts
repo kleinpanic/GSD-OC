@@ -103,3 +103,26 @@ test("discoverPlanUnits: builds ExecUnits from a phase's PLAN.md files", async (
     assert.deepEqual(discoverPlanUnits(join(d, ".planning"), "9"), []);
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
+
+test("LEAK FIX: a throwing runSubagent aborts the worktree (makeUnitDispatcher)", async () => {
+  const { makeUnitDispatcher } = await import("../src/orchestrate/parallel-plan.js");
+  const { mkdtempSync, rmSync, existsSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { execFileSync } = await import("node:child_process");
+  const repo = mkdtempSync(join(tmpdir(), "gsd-leak-"));
+  const g = (a: string[]) => execFileSync("git", a, { cwd: repo, encoding: "utf8" });
+  g(["init", "-q", "-b", "main"]); g(["config", "user.email", "t@t"]); g(["config", "user.name", "t"]); g(["config", "commit.gpgsign", "false"]);
+  const { writeFileSync } = await import("node:fs");
+  writeFileSync(join(repo, "a.txt"), "1"); g(["add", "a.txt"]); g(["commit", "-qm", "base"]);
+  try {
+    // an api whose run() throws
+    const api = { runtime: { subagent: { run: async () => { throw new Error("boom"); }, waitForRun: async () => ({}), getSessionMessages: async () => ({ messages: [] }), deleteSession: async () => {} } } } as never;
+    const dispatch = makeUnitDispatcher(api, "intent", repo);
+    const r = await dispatch({ planId: "1-01", worktreeName: "exec-1-01", dependsOn: [] });
+    assert.equal(r.status, "failed");
+    assert.match(r.output!, /dispatch threw/);
+    // the worktree dir must NOT be left behind
+    assert.ok(!existsSync(join(repo, ".gsd-worktrees", "exec-1-01")) && !existsSync(join(repo, "exec-1-01")), "worktree aborted, no leak");
+  } finally { rmSync(repo, { recursive: true, force: true }); }
+});

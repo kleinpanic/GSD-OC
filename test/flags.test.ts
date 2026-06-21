@@ -40,3 +40,11 @@ test("flags-as-intent: the full upstream flag set is covered", () => {
   assert.ok(suggestFlags("power mode", "discuss-phase").includes("--power"));
   assert.ok(suggestFlags("in batch", "discuss-phase").includes("--batch"));
 });
+
+test("BLOCKER #2: --wave / --from / --to honor command scoping (no execute-only flag on ship)", () => {
+  assert.deepEqual(suggestFlags("execute wave 2 then ship", "ship"), [], "ship gets no --wave");
+  assert.ok(suggestFlags("execute wave 2", "execute-phase").includes("--wave 2"), "execute gets --wave");
+  assert.deepEqual(suggestFlags("from phase 2 to 5", "discuss-phase").filter((f) => f.startsWith("--from") || f.startsWith("--to")), [], "discuss gets no range flags");
+  assert.ok(suggestFlags("from phase 2 to 5", "execute-phase").includes("--from 2"), "execute gets range flags");
+  assert.ok(suggestFlags("execute wave 2").includes("--wave 2"), "no command → wave applies (generic routing)");
+});

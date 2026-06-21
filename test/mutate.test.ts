@@ -147,3 +147,15 @@ test("WR-01: a MIXED-ending file normalizes to LF (bare LF lines not promoted to
   assert.match(out, /total_plans: 5/);
   assert.ok(!/\r/.test(out), "mixed-ending file normalized to LF, no bare-LF promotion");
 });
+
+test("REGRESSION: setFrontmatterField preserves intentional blank lines on a field update (1a)", () => {
+  const out = setFrontmatterField("---\nstatus: old\n\nnotes: x\n---\n\nbody\n", "status", "new");
+  assert.match(out, /status: new\n\nnotes: x/, "the blank line between status and notes survives");
+  assert.match(out, /---\n\nbody/, "the body separator survives");
+});
+
+test("setFrontmatterField drops a duplicate key with NO stray blank line", () => {
+  const out = setFrontmatterField("---\nstatus: one\nstatus: two\nfoo: bar\n---\n", "status", "three");
+  assert.equal((out.match(/^status:/gm) || []).length, 1, "exactly one status line");
+  assert.match(out, /status: three\nfoo: bar/, "no blank gap where the dup was removed");
+});

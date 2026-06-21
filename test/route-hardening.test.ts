@@ -162,3 +162,17 @@ test("Finding 2: **Status**: failed (colon outside bold) triggers the error hard
     assert.equal(r.action, "halt", "error/failed status now halts (gate no longer bypassed)");
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
+
+test("Finding #7: an orphan-summary phase (summaries>plans) routes to verify, not silently skipped", () => {
+  const d = mkdtempSync(join(tmpdir(), "gsd-orphan-"));
+  const p = join(d, ".planning"); const ph = join(p, "phases", "01-x"); mkdirSync(ph, { recursive: true });
+  try {
+    writeFileSync(join(p, "ROADMAP.md"), "### Phase 1: X\n**Goal:** g\n");
+    writeFileSync(join(p, "STATE.md"), "---\nstatus: executing\n---\n");
+    // one PLAN but TWO summaries (an orphan summary from a rename) → must route to verify, not fall through
+    writeFileSync(join(ph, "01-01-PLAN.md"), "#");
+    writeFileSync(join(ph, "01-01-SUMMARY.md"), "#");
+    writeFileSync(join(ph, "01-02-SUMMARY.md"), "#");
+    assert.equal(route(p).action, "verify-work", "orphan-summary phase routes to verify");
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});

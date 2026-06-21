@@ -79,7 +79,15 @@ export function makeSubagentDispatcher(
     }
 
     // baseAgentId hosts the GSD persona as a sub-lane (allowlist requirement — see runSubagent).
-    const res = await runSubagent(api, agentId, msg, baseAgentId ? { baseAgentId } : {});
+    // LEAK FIX: if runSubagent THROWS (run() rejects), the worktree we created above must still be aborted —
+    // otherwise the cleanup block below is skipped and the worktree dir + branch leak. Catch, clean, surface failure.
+    let res;
+    try {
+      res = await runSubagent(api, agentId, msg, baseAgentId ? { baseAgentId } : {});
+    } catch (e) {
+      if (wt && wtName) removeWorktree(wt.repoRoot, wtName);
+      return { ok: false, output: `dispatch threw: ${e instanceof Error ? e.message : String(e)}` };
+    }
     const ok = res.status === "ok";
 
     if (wt && wtName) {

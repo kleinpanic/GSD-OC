@@ -286,7 +286,10 @@ export function route(planningDir: string): RouteResult {
 
     // Route 5: all plans have summaries → verify. (Phase complete; continue to next phase
     // only after verification — so Route 5 fires before advancing.)
-    if (fp.plans.length > 0 && fp.summaries.length === fp.plans.length) {
+    // Finding #7: use `>=`, not `===` — a phase with an ORPHAN summary (summaries > plans, from a rename/race)
+    // otherwise satisfied neither Route 4 (`<`) nor this (`===`) and fell through the loop with NO action,
+    // silently skipping its verification. `>=` routes any fully-summarized phase to verify.
+    if (fp.plans.length > 0 && fp.summaries.length >= fp.plans.length) {
       // CR-01: a complete phase must be verified before the walk advances — for ALL phases,
       // not just the last. A non-last complete-but-unverified phase previously fell through
       // (silently skipping verification) and could surface a later phase's discuss/plan route.

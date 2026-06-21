@@ -110,9 +110,13 @@ export function selectPath(input: SelectPathInput): PathStep[] {
   for (const c of CONDITIONAL) {
     const consensus = topIds.filter((id) => c.doc.test(id)).length >= CONSENSUS_MIN;
     if (c.intent.test(intent) || consensus) {
-      // CR-02: a QUICK path must NEVER contain a decision gate — a gate HALTS the driven run and
-      // breaks gsd-quick fast-completion. Strip the gate flag from conditional stages on the quick path.
-      stages.push(isQuick ? { ...c.stage, gate: false } : c.stage);
+      // BLOCKER #3: a QUICK path must not drag in a HEAVY GATED conditional (the UI design-contract / AI-eval
+      // gates). The old code stripped the gate and inserted the stage anyway — turning the gate into a silent
+      // no-op AND inflating a quick task with substantial lifecycle work. A quick task that genuinely needs the
+      // UI/AI contract isn't quick. So on the quick path, SKIP gated conditionals entirely; non-gated long-tail
+      // stages (debug/secure/docs/graphify) are legit small additions and still apply.
+      if (isQuick && c.stage.gate) continue;
+      stages.push(c.stage);
     }
   }
   // WR-04: deterministic ordering. pos collisions (research/ui both pos 30) must not rely on V8

@@ -71,12 +71,17 @@ export function suggestFlags(intent: string, command?: string): string[] {
     if (r.commands && command && !r.commands.includes(command)) continue;
     if (r.re.test(text)) flags.add(r.flag);
   }
-  for (const f of rangeFlags(text)) flags.add(f);
-  // --wave N carries its number; replace the bare --wave with the numbered form when present.
-  const wave = waveFlag(text);
-  if (wave.length) {
-    flags.delete("--wave");
-    for (const w of wave) flags.add(w);
+  // BLOCKER #2: --from/--to and --wave N are scoped, not universal — they must honor `command` like the rules
+  // above, or a `gsd-ship --wave 2` / `gsd-discuss --from 2` gets emitted. range = phase-driving commands; wave =
+  // execute only. When no command is given (generic intent routing) they apply.
+  const RANGE_COMMANDS = new Set(["execute-phase", "autonomous", "next", "verify-work", "ship"]);
+  if (!command || RANGE_COMMANDS.has(command)) for (const f of rangeFlags(text)) flags.add(f);
+  if (!command || command === "execute-phase") {
+    const wave = waveFlag(text);
+    if (wave.length) {
+      flags.delete("--wave");
+      for (const w of wave) flags.add(w);
+    }
   }
   return [...flags];
 }

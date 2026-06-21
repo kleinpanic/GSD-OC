@@ -54,16 +54,20 @@ test("PATH-complexity: a QUICK intent gets the minimal path, not the full lifecy
   assert.ok(has(fix, "debug"), "quick bugfix still routes through debug");
 });
 
-test("CR-02: a QUICK intent NEVER carries a decision gate, even when a gated conditional fires", () => {
-  // "rename" → quick; "ui"/"button" matches the ui conditional, which is gate:true on the full
-  // backbone. On a quick path that gate MUST be stripped so a driven gsd-quick run never halts.
+test("BLOCKER #3: a QUICK intent SKIPS heavy gated conditionals entirely (not gate-stripped) + is gate-free", () => {
+  // "rename" → quick; "ui"/"button" matches the ui conditional, which is gate:true (heavy design contract).
+  // A quick task must NOT drag in the UI gate at all — the old code inserted it gate-stripped (silent no-op +
+  // path inflation). Now the gated conditional is skipped on the quick path.
   const p = selectPath({ intent: "rename the ui button layout", retrieved: [] });
-  assert.ok(has(p, "ui"), "ui conditional still inserted on quick path");
+  assert.ok(!has(p, "ui"), "the heavy gated ui conditional is SKIPPED on a quick path, not inserted gate-less");
   // sanity: the same conditional carries a gate on the full (non-quick) backbone
   const full = selectPath({ intent: "build a ui button layout", retrieved: [] });
   assert.ok(full.find((s) => s.verb === "ui")!.gate, "ui gate present on the full backbone");
-  // …but is stripped on the quick path → the whole quick path is gate-free
+  // the whole quick path remains gate-free (the driven gsd-quick run never halts)
   assert.ok(p.every((s) => !s.gate), "no step on the quick path may halt the driven run");
+  // a NON-gated long-tail conditional (debug) is still a legit small addition on a quick path
+  const dbg = selectPath({ intent: "rename the flaky debug helper", retrieved: [] });
+  assert.ok(has(dbg, "debug"), "non-gated conditionals still apply on quick paths");
 });
 
 test("WR-01: an empty or whitespace-only intent yields an empty path (no work to drive)", () => {

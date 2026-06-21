@@ -55,12 +55,23 @@ export function setFrontmatterField(content: string, key: string, value: string)
     return eol(`---\n${key}: ${quoted}\n---\n\n${content}`);
   }
   const block = fm[1];
-  const line = new RegExp(`^${escapeRe(key)}:.*$`, "gm");
-  // WARNING: replace ALL occurrences of the key (a duplicate key would otherwise leave a stale second value that
-  // a last-wins YAML parser reads). The first match carries the new value; later duplicates are dropped.
-  let replaced = false;
-  const newBlock = line.test(block)
-    ? block.replace(line, () => (replaced ? "" : ((replaced = true), `${key}: ${quoted}`))).replace(/\n\n+/g, "\n")
+  const keyRe = new RegExp(`^${escapeRe(key)}:`);
+  // REGRESSION FIX (1a): rewrite the key by LINE FILTERING, not regex-empty-then-collapse — the old
+  // `.replace(/\n\n+/g,"\n")` destroyed EVERY intentional blank line in the frontmatter on any field update.
+  // Keep the first key line (rewritten), drop later duplicate key lines, leave all other lines (incl. blanks) verbatim.
+  let wrote = false;
+  const lines = block.split("\n");
+  const hasKey = lines.some((ln) => keyRe.test(ln));
+  const newBlock = hasKey
+    ? lines
+        .filter((ln) => {
+          if (!keyRe.test(ln)) return true; // non-key line — preserve verbatim (blank lines survive)
+          if (wrote) return false; // a later DUPLICATE key line — drop it (last-wins YAML hazard)
+          wrote = true;
+          return true; // the first key line — keep (rewritten below)
+        })
+        .map((ln) => (keyRe.test(ln) ? `${key}: ${quoted}` : ln))
+        .join("\n")
     : `${block}\n${key}: ${quoted}`;
   return eol(content.replace(fm[1], () => newBlock));
 }
