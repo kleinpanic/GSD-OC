@@ -19,6 +19,14 @@ function mockRun(state: { ghInstalled?: boolean; ghAuthed?: boolean; origin?: st
   };
 }
 
+test("SECURITY: argv-injection — a flag-smuggling repo name is rejected", () => {
+  for (const bad of ["--upload-pack=x", "-x", ".hidden", "a/b", "a b", "a;rm"]) {
+    const r = createAutoRepo("/r", "private", { name: bad, run: mockRun({}) });
+    assert.match(r.skipped!, /invalid repo name/, bad);
+  }
+  assert.match(createAutoRepo("/r", "private", { name: "ok", owner: "--evil", run: mockRun({}) }).skipped!, /invalid repo owner/);
+});
+
 test("auto-repo off → skipped", () => {
   assert.deepEqual(createAutoRepo("/r", "off", { run: mockRun({}) }).skipped, "auto_repo=off");
 });

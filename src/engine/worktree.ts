@@ -103,7 +103,12 @@ export function mergeAndRemoveWorktree(
   const argv: string[][] = [];
   const mergeArgs = ["merge", opts.noFastForward === false ? "--ff" : "--no-ff", "--no-edit", branch];
   const merge = run(repoRoot, mergeArgs, opts.dryRun, argv);
-  if (!merge.ok) return { argv, ok: false, error: `merge ${branch} failed (resolve the conflict): ${merge.error}` };
+  if (!merge.ok) {
+    // CONFLICT: abort so the base tree is left CLEAN (mid-merge state would corrupt the NEXT unit's merge).
+    // The unit's work survives on its branch `gsd/<name>` for resolution; only this unit fails.
+    run(repoRoot, ["merge", "--abort"], opts.dryRun, argv);
+    return { argv, ok: false, error: `merge ${branch} conflicted (work preserved on the branch; tree aborted clean): ${merge.error}` };
+  }
   run(repoRoot, ["worktree", "remove", "--force", "--", wt], opts.dryRun, argv);
   run(repoRoot, ["branch", "-D", branch], opts.dryRun, argv);
   return { argv, ok: true };

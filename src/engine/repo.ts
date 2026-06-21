@@ -57,6 +57,11 @@ export function createAutoRepo(
   if (mode === "off") return { skipped: "auto_repo=off" };
   const run = opts.run ?? realRun;
   const name = opts.name || path.basename(path.resolve(repoRoot));
+  // Argv-injection guard: a name/owner like `--upload-pack=…` would smuggle a flag into `gh repo create <slug>`.
+  // Require a strict repo-name char class (no leading dash/dot, no separators) before it reaches the CLI.
+  const validName = (v: string) => /^[A-Za-z0-9._-]+$/.test(v) && !v.startsWith("-") && !v.startsWith(".");
+  if (!validName(name)) return { skipped: `invalid repo name: ${JSON.stringify(name)}`, needsUser: true };
+  if (opts.owner && !validName(opts.owner)) return { skipped: `invalid repo owner: ${JSON.stringify(opts.owner)}`, needsUser: true };
   const slug = opts.owner ? `${opts.owner}/${name}` : name;
 
   // GUARD 1 — gh installed
