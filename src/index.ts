@@ -352,7 +352,12 @@ const entry = definePluginEntry({
           return { ...planned, autonomous: true, completed: auto.completed, reason: auto.reason, haltedAt: auto.haltedAt, steps: auto.steps };
         }
         if (args?.drive && runtimeApi) {
-          const dispatch = makeSubagentDispatcher(runtimeApi as never, intent, baseAgent);
+          // use_worktrees: when the config opts in (and we're in a git repo), isolate code-writing steps in
+          // per-plan worktrees (the OCT-5 isolation). Off by default — the config switch now actually gates it.
+          const driveCfg = readGsdConfig(".planning").config;
+          const useWorktrees = (driveCfg.workflow as { use_worktrees?: boolean })?.use_worktrees === true;
+          const repoRoot = gsdProjectRoot(process.cwd());
+          const dispatch = makeSubagentDispatcher(runtimeApi as never, intent, baseAgent, useWorktrees && repoRoot ? { worktree: { repoRoot } } : {});
           const run = await executePath(path, dispatch, { autoGates: args?.autoGates === true });
           return {
             ...planned,
