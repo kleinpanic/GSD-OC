@@ -29,3 +29,26 @@ test("scaffoldPlanning is idempotent (never clobbers an initialized project)", (
     assert.equal(scaffoldPlanning(p).created, false, "second call is a no-op");
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
+
+test("gsd_state commit op: honors commit_docs:false (intentional skip)", async () => {
+  const mod = await import("../src/index.js");
+  const tools: { name: string; execute: (id: string, a: unknown, s?: unknown) => Promise<{ ok: boolean; skipped?: string; committed?: boolean }> }[] = [];
+  (mod.default as { register: (api: unknown) => void }).register({
+    registerService() {}, registerTool(t: never) { tools.push(t); }, registerCommand() {}, registerHook() {}, registerInternalHook() {},
+    session: { state: { registerSessionExtension() {} } }, pluginConfig: {},
+  });
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const d = mkdtempSync(join(tmpdir(), "gsd-commit-"));
+  const p = join(d, ".planning"); mkdirSync(p, { recursive: true });
+  const cwd = process.cwd();
+  try {
+    writeFileSync(join(p, "config.json"), JSON.stringify({ commit_docs: false }));
+    process.chdir(d);
+    const state = tools.find((t) => t.name === "gsd_state")!;
+    const r = await state.execute("x", { op: "commit" }, undefined);
+    assert.equal(r.skipped, "commit_docs:false");
+    assert.equal(r.committed, false);
+  } finally { process.chdir(cwd); rmSync(d, { recursive: true, force: true }); }
+});

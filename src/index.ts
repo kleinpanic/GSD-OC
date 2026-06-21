@@ -23,6 +23,7 @@ import { scaffoldPlanning } from "./engine/scaffold.js";
 import { contextTemplate, artifactName } from "./engine/artifacts.js";
 import { buildProgress } from "./engine/progress.js";
 import { undoLast } from "./engine/undo.js";
+import { commitFiles } from "./engine/commit.js";
 import { createAutoRepo, type RepoMode } from "./engine/repo.js";
 import { createWorkBranch } from "./engine/branch.js";
 import { resolveReviewer, crossAiReview, type ReviewFinding } from "./orchestrate/cross-ai-review.js";
@@ -115,7 +116,7 @@ const commandParams = Type.Object(
 /** TypeBox schema for the gsd_state mutation tool (ENG-WRITE-01). */
 const stateParams = Type.Object(
   {
-    op: Type.String({ description: "init | branch | progress | undo | set-status | record-progress | add-decision | add-blocker | add-phase | scaffold-phase | update-plan-progress | complete-phase | complete-requirement | complete-milestone" }),
+    op: Type.String({ description: "init | branch | commit | progress | undo | set-status | record-progress | add-decision | add-blocker | add-phase | scaffold-phase | update-plan-progress | complete-phase | complete-requirement | complete-milestone" }),
     status: Type.Optional(Type.String({ description: "For set-status (e.g. planning|executing|complete|error)." })),
     decision: Type.Optional(Type.String({ description: "For add-decision: the decision text." })),
     blocker: Type.Optional(Type.String({ description: "For add-blocker: the blocker text." })),
@@ -552,6 +553,19 @@ const entry = definePluginEntry({
                 repo = createAutoRepo(path.dirname(dir), mode, { name: args.name });
               }
               return { ok: true, op: args.op, ...scaffolded, ...(repo ? { repo } : {}) };
+            }
+            case "commit": {
+              // The GSD "metadata commit": stage + commit the planning docs by name (never -A, never --no-verify;
+              // GPG/identity per the user's git config). Honors commit_docs — false is an intentional skip path.
+              if (readGsdConfig(dir).config.commit_docs === false) return { ok: true, op: args.op, committed: false, skipped: "commit_docs:false" };
+              const docs = ["STATE.md", "ROADMAP.md", "REQUIREMENTS.md", "PROJECT.md"]
+                .map((f) => `${dir}/${f}`)
+                .filter((f) => fs.existsSync(f));
+              if (!docs.length) return { ok: false, error: "no planning docs to commit" };
+              try {
+                const res = commitFiles(docs, args.status ?? "chore(planning): update GSD planning docs", { cwd: path.dirname(dir) });
+                return { ok: res.committed, op: args.op, ...res };
+              } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
             }
             case "progress": return { ok: true, op: args.op, ...buildProgress(dir) };
             case "undo": return { op: args.op, ...undoLast(path.dirname(dir)) };
