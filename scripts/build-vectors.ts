@@ -5,7 +5,7 @@
  * LanceDB table (lancedb/). Incremental: a prior vectors cache is reused for unchanged chunks (RET-06).
  *
  * Run (point the base URL at a reachable spark endpoint; token from env, never inlined):
- *   SPARK_EMBEDDINGS_BASE_URL=http://10.99.1.1:18091/v1 node --experimental-strip-types scripts/build-vectors.ts
+ *   SPARK_EMBEDDINGS_BASE_URL=http://10.0.0.1:18091/v1 node --experimental-strip-types scripts/build-vectors.ts
  */
 // Imports the COMPILED dist modules (real .js) so this strip-types script resolves the full value-import
 // graph (src/*.ts cross-import with .js, which strip-types can't resolve). Run `npm run build` first.

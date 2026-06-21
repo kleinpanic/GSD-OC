@@ -4,7 +4,7 @@
  *   - HYBRID  (semantic spark + LanceDB + BM25 + trigram, RRF)   ← GSD-on
  *   - LEXICAL (BM25 + trigram only, semantic disabled)            ← GSD-off baseline / ablation
  * Reports recall@5, recall@10, and MRR per arm. Run (spark over WG):
- *   SPARK_EMBEDDINGS_BASE_URL=http://10.99.1.1:18091/v1 node --experimental-strip-types scripts/benchmark.ts
+ *   SPARK_EMBEDDINGS_BASE_URL=http://10.0.0.1:18091/v1 node --experimental-strip-types scripts/benchmark.ts
  */
 import { writeFileSync } from "node:fs";
 import { retrieve } from "../dist/retrieval/retrieve.js";

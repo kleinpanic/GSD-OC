@@ -30,7 +30,7 @@ function sparkToken(env: NodeJS.ProcessEnv): string | undefined {
 
 /**
  * Resolve the spark base URL. Prefer an explicit SPARK_EMBEDDINGS_BASE_URL; otherwise derive it from
- * SPARK_HOST (what the gateway actually exports — e.g. "10.99.1.1") + the default NIM port + /v1.
+ * SPARK_HOST (what the gateway actually exports — e.g. "10.0.0.1") + the default NIM port + /v1.
  */
 function sparkBaseUrl(env: NodeJS.ProcessEnv): string | undefined {
   if (env.SPARK_EMBEDDINGS_BASE_URL) return env.SPARK_EMBEDDINGS_BASE_URL.replace(/\/+$/, "");

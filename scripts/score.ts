@@ -5,7 +5,7 @@
  *   R = 0.35·recall@5 + 0.25·recall@10 + 0.25·MRR + 0.15·longtail@10   (retrieval)
  *   P = mean( 0.60·stageF1 + 0.25·backboneOrder + 0.15·gateFlags )     (path correctness)
  *   S = mean( precision@8 )                                            (skill relevance)
- * Run (spark over WG): SPARK_EMBEDDINGS_BASE_URL=http://10.99.1.1:18091/v1 node --experimental-strip-types scripts/score.ts
+ * Run (spark over WG): SPARK_EMBEDDINGS_BASE_URL=http://10.0.0.1:18091/v1 node --experimental-strip-types scripts/score.ts
  */
 import { writeFileSync } from "node:fs";
 import { retrieve } from "../dist/retrieval/retrieve.js";

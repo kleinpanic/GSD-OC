@@ -67,10 +67,10 @@ test("sparkConfig requires all env vars; trims trailing slash; embedAvailable re
 test("sparkConfig adapts to the GATEWAY env contract (SPARK_HOST + SPARK_BEARER_TOKEN/SPARK_API_KEY)", () => {
   // The OpenClaw gateway exports SPARK_HOST + SPARK_BEARER_TOKEN, NOT SPARK_EMBEDDINGS_BASE_URL/MODEL.
   // embedAvailable must be true and the base URL derived from the host (this was the live semantic:false bug).
-  const gw = { SPARK_HOST: "10.99.1.1", SPARK_BEARER_TOKEN: "tok", SPARK_API_KEY: "tok" } as NodeJS.ProcessEnv;
+  const gw = { SPARK_HOST: "10.0.0.1", SPARK_BEARER_TOKEN: "tok", SPARK_API_KEY: "tok" } as NodeJS.ProcessEnv;
   assert.equal(embedAvailable(gw), true);
   const c = sparkConfig(gw);
-  assert.equal(c.baseUrl, "http://10.99.1.1:18091/v1");
+  assert.equal(c.baseUrl, "http://10.0.0.1:18091/v1");
   assert.equal(c.model, "nvidia/llama-nemotron-embed-vl-1b-v2"); // default = corpus-vector model
   assert.equal(c.token, "tok");
   // SPARK_API_KEY alone (no bearer) also works
