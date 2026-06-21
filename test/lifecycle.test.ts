@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, mkdirSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addPhase, nextPhaseNumber, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone } from "../src/engine/lifecycle.js";
+import { setFrontmatterField } from "../src/engine/mutate.js";
 import { route } from "../src/engine/route.js";
 
 function tmpPlanning(roadmap = "# Roadmap\n"): string {
@@ -71,4 +72,31 @@ test("completeMilestone archives phases/ + resets it", () => {
     assert.ok(existsSync(join(p, "milestones", "v1.1-phases", "01-x")), "phases archived");
     assert.ok(existsSync(join(p, "phases")), "fresh phases/ for next milestone");
   } finally { rmSync(join(p, ".."), { recursive: true, force: true }); }
+});
+
+test("BLOCKER: markPhaseComplete refreshes a far Status in place (no duplicate line)", () => {
+  const d = mkdtempSync(join(tmpdir(), "gsd-mpc-")); const p = join(d, ".planning"); mkdirSync(p, { recursive: true });
+  try {
+    writeFileSync(join(p, "ROADMAP.md"), "### Phase 1: auth\n\n**Goal:** g\n**Requirements:** r\n**Depends-On:** x\n**Plans:** 0 plans\n**Status:** Pending\n");
+    markPhaseComplete(p, 1); markPhaseComplete(p, 1);
+    const out = readFileSync(join(p, "ROADMAP.md"), "utf8");
+    assert.equal((out.match(/\*\*Status:\*\*/g) || []).length, 1, "exactly one Status line");
+    assert.match(out, /\*\*Status:\*\* Complete/);
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+test("BLOCKER: setFrontmatterField updates in place when frontmatter isn't byte-0 (no duplicate block)", () => {
+  const out = setFrontmatterField("\n---\nstatus: a\n---\nbody\n", "status", "b");
+  assert.equal((out.match(/^---$/gm) || []).length, 2, "still exactly one frontmatter block (2 fences)");
+  assert.match(out, /status: b/);
+  assert.doesNotMatch(out, /status: a/, "old value gone, not orphaned");
+});
+
+test("updatePlanProgress inserts a **Plans:** line when the phase block lacks one (no silent no-op)", () => {
+  const d = mkdtempSync(join(tmpdir(), "gsd-upp-")); const p = join(d, ".planning"); mkdirSync(p, { recursive: true });
+  try {
+    writeFileSync(join(p, "ROADMAP.md"), "### Phase 1: a\n\n**Goal:** x\n");
+    assert.equal(updatePlanProgress(p, 1, 3), true);
+    assert.match(readFileSync(join(p, "ROADMAP.md"), "utf8"), /\*\*Plans:\*\* 3 plans/);
+  } finally { rmSync(d, { recursive: true, force: true }); }
 });

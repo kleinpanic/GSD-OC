@@ -45,15 +45,23 @@ function withEol(content: string): [string, (s: string) => string] {
 export function setFrontmatterField(content: string, key: string, value: string): string {
   const [lf, eol] = withEol(content);
   content = lf;
-  const fm = /^---\n([\s\S]*?)\n---/.exec(content);
+  // BLOCKER: tolerate a leading BOM / blank lines before the opening `---` — otherwise a STATE.md that isn't
+  // byte-0-anchored (hand-edited blank top line, BOM) is treated as having NO frontmatter and a SECOND block gets
+  // prepended, orphaning the real one. Match the first fenced block allowing leading whitespace/BOM.
+  const fm = /^[﻿ \t\r\n]*---\n([\s\S]*?)\n---/.exec(content);
   const quoted = scalar(value);
   // function replacers everywhere — a raw replacement string lets `$`-sequences in the value corrupt it (CR-1).
   if (!fm) {
     return eol(`---\n${key}: ${quoted}\n---\n\n${content}`);
   }
   const block = fm[1];
-  const line = new RegExp(`^${escapeRe(key)}:.*$`, "m");
-  const newBlock = line.test(block) ? block.replace(line, () => `${key}: ${quoted}`) : `${block}\n${key}: ${quoted}`;
+  const line = new RegExp(`^${escapeRe(key)}:.*$`, "gm");
+  // WARNING: replace ALL occurrences of the key (a duplicate key would otherwise leave a stale second value that
+  // a last-wins YAML parser reads). The first match carries the new value; later duplicates are dropped.
+  let replaced = false;
+  const newBlock = line.test(block)
+    ? block.replace(line, () => (replaced ? "" : ((replaced = true), `${key}: ${quoted}`))).replace(/\n\n+/g, "\n")
+    : `${block}\n${key}: ${quoted}`;
   return eol(content.replace(fm[1], () => newBlock));
 }
 

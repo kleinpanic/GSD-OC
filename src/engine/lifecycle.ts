@@ -74,14 +74,20 @@ export function updatePlanProgress(planningDir: string, phaseNum: number | strin
   let i = lines.findIndex((l) => headRe.test(l));
   if (i === -1) return false;
   const done = completed != null ? ` (${completed} done)` : "";
+  let lastInBlock = i; // WARNING: track the block end so a missing **Plans:** line can be INSERTED, not silently no-op'd
   for (let j = i + 1; j < lines.length && !/^#{2,4}\s*Phase\s/i.test(lines[j]); j++) {
+    lastInBlock = j;
     if (/^\*\*Plans:\*\*/.test(lines[j])) {
       lines[j] = `**Plans:** ${plans} plans${done}`;
       fs.writeFileSync(roadmapPath(planningDir), lines.join("\n"));
       return true;
     }
   }
-  return false;
+  // No Plans line in this phase block (hand-edited / pre-grammar roadmap) — insert one rather than silently
+  // failing, so route()/parseRoadmapPhases see the real plan count instead of a stale/absent value.
+  lines.splice(lastInBlock + 1, 0, `**Plans:** ${plans} plans${done}`);
+  fs.writeFileSync(roadmapPath(planningDir), lines.join("\n"));
+  return true;
 }
 
 /** phase.complete — annotate a phase `**Status:** Complete` in ROADMAP (display; route() gates on VERIFICATION). */
@@ -92,8 +98,13 @@ export function markPhaseComplete(planningDir: string, phaseNum: number | string
   const headRe = new RegExp(`^(#{2,4}\\s*Phase\\s+${String(phaseNum).replace(/\./g, "\\.")}\\s*:.*)$`, "i");
   const i = lines.findIndex((l) => headRe.test(l));
   if (i === -1) return false;
-  // insert/refresh a Status line right after the heading
-  const statusIdx = lines.findIndex((l, k) => k > i && k < i + 6 && /^\*\*Status:\*\*/.test(l));
+  // BLOCKER: scan for an existing **Status:** anywhere in THIS phase block (up to the next phase heading), not a
+  // fixed 6-line window — a Status that sat ≥6 lines below (e.g. after a Depends-On + Plans line) was missed and a
+  // DUPLICATE Status got spliced after the heading. Refresh in place if found; else insert right after the heading.
+  let statusIdx = -1;
+  for (let k = i + 1; k < lines.length && !/^#{2,4}\s*Phase\s/i.test(lines[k]); k++) {
+    if (/^\*\*Status:\*\*/.test(lines[k])) { statusIdx = k; break; }
+  }
   if (statusIdx !== -1) lines[statusIdx] = "**Status:** Complete";
   else lines.splice(i + 1, 0, "**Status:** Complete");
   fs.writeFileSync(roadmapPath(planningDir), lines.join("\n"));
@@ -120,7 +131,9 @@ export function markRequirementComplete(planningDir: string, reqId: string): boo
 export function completeMilestone(planningDir: string, version: string): { archived: boolean; dir: string } {
   const v = (version ?? "").replace(/[^\w.-]/g, "") || "v0";
   const phasesDir = path.join(planningDir, "phases");
-  const dest = path.join(planningDir, "milestones", `${v}-phases`);
+  // WARNING: route the rename target through assertWithinRoot like scaffoldPhaseDir — the sanitizer already strips
+  // separators, but this makes containment explicit + consistent (one regex change can't open a traversal).
+  const dest = assertWithinRoot(path.join(planningDir, "milestones"), `${v}-phases`);
   if (!fs.existsSync(phasesDir)) return { archived: false, dir: dest };
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.renameSync(phasesDir, dest);
