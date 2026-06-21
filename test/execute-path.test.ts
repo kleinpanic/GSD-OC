@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { executePath, type StepOutcome } from "../src/orchestrate/execute-path.js";
+import { executePath, makeSubagentDispatcher, type StepOutcome } from "../src/orchestrate/execute-path.js";
 import { selectPath } from "../src/orchestrate/select-path.js";
 import { route } from "../src/engine/route.js";
 
@@ -98,4 +98,14 @@ test("route: last phase verified (passing VERIFICATION.md) → complete-mileston
   const r = route(fx("route-verified"));
   assert.equal(r.action, "complete-milestone");
   assert.equal(r.reason, "all-complete");
+});
+
+test("CR-01: an unknown verb fails CLOSED (does not silently no-op-succeed)", async () => {
+  const disp = makeSubagentDispatcher({ runtime: { subagent: {} } } as never, "intent");
+  const bad = await disp({ verb: "reviewww" as never, gate: false, pos: 0, reason: "typo" } as never);
+  assert.equal(bad.ok, false, "unknown verb must not pass");
+  assert.match(String(bad.output), /unknown verb/);
+  // a legit skill/gate verb still no-ops to true
+  const ok = await disp({ verb: "ship" as never, gate: true, pos: 0, reason: "gate" } as never);
+  assert.equal(ok.ok, true);
 });
