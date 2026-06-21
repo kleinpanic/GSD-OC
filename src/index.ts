@@ -25,6 +25,7 @@ import { VERB_TO_SUBAGENT } from "./orchestrate/execute-path.js";
 import { resolveAgentOptional } from "./agents/index.js";
 import { resolveWorkstreamDir, listWorkstreams, createWorkstream, switchWorkstream, completeWorkstream, suggestWorkstream, activeWorkstream } from "./engine/workstream.js";
 import { executePath, makeSubagentDispatcher } from "./orchestrate/execute-path.js";
+import { runAutonomous, makeActionDispatcher } from "./orchestrate/autonomous.js";
 
 const PLUGIN_ID = "gsd-oc";
 const PLUGIN_NAME = "GSD-OC";
@@ -129,6 +130,9 @@ const orchestrateParams = Type.Object(
     ),
     autoGates: Type.Optional(
       Type.Boolean({ description: "When driving, auto-proceed through decision gates (autonomous run) instead of halting for approval." }),
+    ),
+    autonomous: Type.Optional(
+      Type.Boolean({ description: "Drive the FULL multi-phase loop (re-read route() per step until the milestone completes), not just a single path. Honors autoGates + a no-progress guard." }),
     ),
   },
   { additionalProperties: false },
@@ -278,7 +282,7 @@ const entry = definePluginEntry({
       parameters: orchestrateParams,
       async execute(
         _toolCallId: string,
-        args: { intent?: string; drive?: boolean; autoGates?: boolean },
+        args: { intent?: string; drive?: boolean; autoGates?: boolean; autonomous?: boolean },
         _signal?: unknown,
         _onUpdate?: unknown,
         context?: { api?: unknown },
@@ -314,14 +318,23 @@ const entry = definePluginEntry({
         // arg; otherwise return the plan (graceful — never crash).
         const ctxApi = (context?.api ?? null) as { runtime?: { subagent?: unknown } } | null;
         const runtimeApi = pluginApi?.runtime?.subagent ? pluginApi : ctxApi?.runtime?.subagent ? ctxApi : null;
-        // Diagnostic: report whether the in-plugin subagent runtime is reachable (drives are only possible when true).
-        if (args?.drive && !runtimeApi) {
-          return { ...planned, drive_available: false, note: "subagent runtime not reachable from the plugin in this host — the agent must dispatch each path step via its own sessions_spawn tool" };
+        // GSD personas must run under a real allowlisted agent (subagents.allowAgents). Default "dev" —
+        // present in every primary agent's allowlist; operator-overridable via pluginConfig.workerAgent.
+        const baseAgent = (typeof pluginConfig?.workerAgent === "string" && pluginConfig.workerAgent) || "dev";
+        if ((args?.autonomous || args?.drive) && !runtimeApi) {
+          return { ...planned, drive_available: false, note: "subagent runtime not reachable from the plugin in this host — the agent must dispatch each step via its own sessions_spawn tool" };
+        }
+        if (args?.autonomous && runtimeApi) {
+          // OCT-W5: the FULL multi-phase autonomous loop — re-reads route() per step, advancing on-disk state
+          // until the milestone completes (or a real halt/gate/no-progress). Bounded + no-progress-guarded.
+          const run = async (agentId: string, message: string) => {
+            const res = await runSubagent(runtimeApi as never, agentId, message, { baseAgentId: baseAgent });
+            return { ok: res.status === "ok", output: res.text || `[${res.status}]` };
+          };
+          const auto = await runAutonomous(".planning", makeActionDispatcher(run, intent), { autoGates: args?.autoGates === true });
+          return { ...planned, autonomous: true, completed: auto.completed, reason: auto.reason, haltedAt: auto.haltedAt, steps: auto.steps };
         }
         if (args?.drive && runtimeApi) {
-          // GSD personas must run under a real allowlisted agent (subagents.allowAgents). Default "dev" —
-          // present in every primary agent's allowlist; operator-overridable via pluginConfig.workerAgent.
-          const baseAgent = (typeof pluginConfig?.workerAgent === "string" && pluginConfig.workerAgent) || "dev";
           const dispatch = makeSubagentDispatcher(runtimeApi as never, intent, baseAgent);
           const run = await executePath(path, dispatch, { autoGates: args?.autoGates === true });
           return {
