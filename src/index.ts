@@ -16,6 +16,7 @@ import { readGsdConfig, bootstrapGsdConfig } from "./engine/config.js";
 import { enforceToolGate, enforceSpawnPersona, gsdProjectRoot } from "./hooks/enforce-gate.js";
 import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
 import { addPhase, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone } from "./engine/lifecycle.js";
+import { validateArtifacts, verifyPhaseCompleteness, validateConsistency, validateHealth } from "./engine/verify.js";
 import { suggestFlags } from "./orchestrate/flags.js";
 import { VERB_TO_SUBAGENT } from "./orchestrate/execute-path.js";
 import { resolveAgentOptional } from "./agents/index.js";
@@ -32,6 +33,16 @@ const SETTINGS_TOOL = "gsd_settings";
 const STATE_TOOL = "gsd_state";
 const COMMAND_TOOL = "gsd_command";
 const WORKSTREAM_TOOL = "gsd_workstream";
+const VERIFY_TOOL = "gsd_verify";
+
+/** TypeBox schema for gsd_verify — native integrity checks (validate-artifacts gate + verify/validate verbs). */
+const verifyParams = Type.Object(
+  {
+    op: Type.String({ description: "validate-artifacts | phase-completeness | consistency | health" }),
+    phase: Type.Optional(Type.String({ description: "Phase number (for phase-completeness)." })),
+  },
+  { additionalProperties: false },
+);
 
 /** TypeBox schema for gsd_workstream — manage parallel GSD tracks (list/create/switch/complete/suggest). */
 const workstreamParams = Type.Object(
@@ -479,6 +490,34 @@ const entry = definePluginEntry({
       },
     } as never);
 
+    // OCT-W2: gsd_verify — native integrity engine (the validate-artifacts write-guarantee + verify/validate).
+    // The orchestrator can now PRODUCE the integrity verdicts it routes on, not just dispatch a subagent. 0 slots.
+    api.registerTool({
+      name: VERIFY_TOOL,
+      label: "GSD Verify",
+      description:
+        "Run native GSD integrity checks (op: validate-artifacts | phase-completeness | consistency | health). Returns {ok, defects[]} — validate-artifacts is the write-guarantee gate (an artifact is valid iff route() can drive it).",
+      parameters: verifyParams,
+      async execute(_toolCallId: string, args: { op?: string; phase?: string }, _signal?: unknown) {
+        const root = gsdProjectRoot(process.cwd());
+        const base = root ? `${root}/.planning` : ".planning";
+        const dir = resolveWorkstreamDir(base);
+        try {
+          switch (args?.op) {
+            case "validate-artifacts": return { ok: true, ...validateArtifacts(dir) };
+            case "phase-completeness":
+              if (!args.phase) return { ok: false, error: "phase-completeness requires phase" };
+              return { ok: true, ...verifyPhaseCompleteness(dir, args.phase) };
+            case "consistency": return { ok: true, ...validateConsistency(dir) };
+            case "health": return { ok: true, ...validateHealth(dir) };
+            default: return { ok: false, error: `unknown op: ${args?.op}` };
+          }
+        } catch (e) {
+          return { ok: false, error: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    } as never);
+
     // R0.4 Tier-1: register the 6 namespace router tools (zero Discord slash slots).
     // RTE-01: register the WIRED builder so each router returns the state-aware authoritative
     // next verb (native route('.planning')), not the static substring table (verifier finding).
@@ -585,6 +624,12 @@ Object.defineProperty(entry, toolPluginMetadataSymbol, {
         name: COMMAND_TOOL,
         label: "GSD Command",
         description: "Invoke any individual GSD command/skill by name with intent-inferred flags — 0 slots.",
+        parameters: { type: "object", additionalProperties: false, properties: {} },
+      },
+      {
+        name: VERIFY_TOOL,
+        label: "GSD Verify",
+        description: "Native GSD integrity checks (validate-artifacts/phase-completeness/consistency/health) — 0 slots.",
         parameters: { type: "object", additionalProperties: false, properties: {} },
       },
       {
