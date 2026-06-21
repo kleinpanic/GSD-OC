@@ -33,8 +33,12 @@ export function normalizeInto(v: number[] | Float32Array): Float32Array {
  *  chunkId tiebreak (alphabetical garbage). Detect it at the query boundary so search returns no semantic
  *  hits (fusion falls back to lexical+trigram) rather than emitting plausible-looking nonsense. */
 function isZeroVector(v: number[]): boolean {
-  for (let i = 0; i < v.length; i++) if (v[i] !== 0) return false;
-  return true;
+  // BLOCKER (#2): check zero MAGNITUDE, not per-component `!== 0`. A denormal/tiny vector (all `1e-300`) has
+  // non-zero components but its squared norm underflows to 0 → normalizeInto would emit an ALL-ZERO unit vector
+  // that collapses cosine ranking to the alphabetical tiebreak. Summing squares catches true-zero AND underflow.
+  let norm = 0;
+  for (let i = 0; i < v.length; i++) norm += v[i] * v[i];
+  return norm === 0;
 }
 
 export interface VectorBackend {

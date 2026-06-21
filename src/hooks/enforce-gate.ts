@@ -45,6 +45,15 @@ export function targetPathOf(event: BeforeToolCallEvent): string | undefined {
     const v = p[k];
     if (typeof v === "string" && v) return v;
   }
+  // FALSE-ALLOW fix (#1): a mutating tool may carry its target under an UNRECOGNIZED key (dest/uri/source_path/
+  // target…) with no host-derived path. The fixed PATH_KEYS list would then return undefined → the caller falls
+  // back to cwd → an out-of-order edit inside an unplanned project slips through when cwd is elsewhere. Fall back
+  // to the first OWN string param that looks like a filesystem path (has a separator or a code-file extension), so
+  // the edit is scoped to its real project instead of cwd. Still undefined only when nothing path-like exists.
+  for (const k of Object.keys(p)) {
+    const v = p[k];
+    if (typeof v === "string" && v && /[/\\]|\.[a-z0-9]{1,8}$/i.test(v)) return v;
+  }
   return undefined;
 }
 
@@ -92,7 +101,9 @@ export function enforceToolGate(
   _ctx: BeforeToolCallContext,
   deps: EnforceGateDeps = {},
 ): BeforeToolCallResult | void {
-  if (!MUTATING_TOOLS.has((event.toolName ?? "").toLowerCase())) return; // not a file mutation → allow
+  // FALSE-ALLOW fix: trim AND lowercase — a whitespace-padded tool name ("  edit  ") otherwise fails the
+  // MUTATING_TOOLS membership check and slips a pre-plan edit THROUGH the gate (the worst-case bypass).
+  if (!MUTATING_TOOLS.has((event.toolName ?? "").trim().toLowerCase())) return; // not a file mutation → allow
 
   // Scope to the EDITED FILE's GSD project, NOT process.cwd() (the gateway home). Find the .planning root
   // by walking up from the file being edited; if the edit isn't inside a GSD project, GSD does not apply.
@@ -169,7 +180,7 @@ export function enforceSpawnPersona(
   _ctx: BeforeToolCallContext,
   deps: EnforceGateDeps = {},
 ): BeforeToolCallResult | void {
-  if (!SPAWN_TOOLS.has((event.toolName ?? "").toLowerCase())) return;
+  if (!SPAWN_TOOLS.has((event.toolName ?? "").trim().toLowerCase())) return; // trim too (same bypass class)
   // Scope to an actual GSD project (a .planning ancestor of cwd) so we never inject GSD personas into
   // non-GSD agents' spawns (finance/legal/etc.). No GSD project → leave the spawn untouched.
   const projectRoot = gsdProjectRoot(deps.cwd ?? process.cwd());
@@ -177,7 +188,13 @@ export function enforceSpawnPersona(
   if (optedOut({ cwd: projectRoot, pluginConfig: deps.pluginConfig })) return;
 
   const params = event.params ?? {};
-  const taskText = String(params.message ?? params.task ?? params.prompt ?? "");
+  // #3: pick the key whose value is actually present FIRST. If the instruction lives in an unknown key
+  // (instructions/input/objective…) none of these are set — injecting a defaulted empty `message` would add a
+  // bogus key AND leave the real instruction un-personaed (a false-allow of an instruction-less GSD subagent).
+  // So bail out when no known instruction key is present, rather than clobbering with an empty default.
+  const key = typeof params.message === "string" ? "message" : typeof params.task === "string" ? "task" : typeof params.prompt === "string" ? "prompt" : null;
+  if (key === null) return; // unknown instruction shape — leave the spawn untouched (don't inject a bogus key)
+  const taskText = String(params[key] ?? "");
   // Already a GSD subagent (persona already injected)? leave it.
   if (/\bGSD subagent\b|gsd-oc:persona/.test(taskText)) return;
 
@@ -187,9 +204,6 @@ export function enforceSpawnPersona(
   const preamble =
     `<!-- gsd-oc:persona -->\nYou are the GSD **${role}** subagent operating under the GSD methodology — ` +
     `follow this role's contract, not free-form work.\n\n${persona}\n\n--- Task ---\n`;
-  // Write the persona back into the SAME key the instruction came from (sessions_spawn uses `task`).
-  // The verifier caught that writing to a fresh `message` key when only `prompt` is present leaves the
-  // original instruction untouched — pick the key by precedence of presence, defaulting to message.
-  const key = params.message != null ? "message" : params.task != null ? "task" : params.prompt != null ? "prompt" : "message";
+  // Write the persona back into the SAME key the instruction came from (resolved above, guaranteed present).
   return { params: { ...params, [key]: preamble + taskText } };
 }

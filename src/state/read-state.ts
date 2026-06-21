@@ -66,7 +66,8 @@ export async function readState(planningDir: string): Promise<ReadStateResult> {
   const result: ReadStateResult = { ...NULL_RESULT };
 
   // Frontmatter: status (authoritative scalar when present).
-  const fm = /^---\n([\s\S]*?)\n---/.exec(raw);
+  // BLOCKER: tolerate CRLF — `---\r\n` otherwise failed `^---\n`, parsing a Windows-saved STATE.md with status=null.
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw);
   if (fm) result.status = frontmatterScalar(fm[1], "status");
 
   // Body: `## Current Position` section (state.cjs:241).

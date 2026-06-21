@@ -60,7 +60,9 @@ function readStatus(planningDir: string): string | null {
   }
   const stripQuotes = (s: string) => s.trim().replace(/^['"]|['"]$/g, "");
   let status: string | null = null;
-  const fm = /^---\n([\s\S]*?)\n---/.exec(raw);
+  // BLOCKER: tolerate CRLF — `---\r\n` (a STATE.md saved on Windows / by an editor) otherwise failed `^---\n`, so
+  // `status` came back null and the error/failed HARD-STOP gate (Route Gate 2) was silently bypassed on a failed project.
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw);
   if (fm) {
     const s = /^status:[ \t]*(.+)$/im.exec(fm[1]);
     if (s) status = stripQuotes(s[1]);
