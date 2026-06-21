@@ -30,6 +30,7 @@ import { resolveReviewer, crossAiReview, type ReviewFinding } from "./orchestrat
 import path from "node:path";
 import { validateArtifacts, verifyPhaseCompleteness, validateConsistency, validateHealth, gapCheck } from "./engine/verify.js";
 import { scanUat, auditOpen } from "./engine/audit.js";
+import { projectStats } from "./engine/stats.js";
 import { pauseWork, resumeWork, writeThread, listThreads, closeThread, capture } from "./engine/session.js";
 import { buildCheckpoint, renderCheckpointDiscord, parseCheckpointReply, type CheckpointType, type GateOption } from "./engine/checkpoint.js";
 import { addLearning, queryLearnings, pruneLearnings } from "./engine/learnings.js";
@@ -87,7 +88,7 @@ const sessionParams = Type.Object(
 /** TypeBox schema for gsd_verify — native integrity checks (validate-artifacts gate + verify/validate verbs). */
 const verifyParams = Type.Object(
   {
-    op: Type.Union([Type.Literal("validate-artifacts"), Type.Literal("phase-completeness"), Type.Literal("consistency"), Type.Literal("gap"), Type.Literal("uat"), Type.Literal("audit-open"), Type.Literal("health")], { description: "validate-artifacts | phase-completeness | consistency | gap | uat | audit-open | health" }),
+    op: Type.Union([Type.Literal("validate-artifacts"), Type.Literal("phase-completeness"), Type.Literal("consistency"), Type.Literal("gap"), Type.Literal("uat"), Type.Literal("audit-open"), Type.Literal("stats"), Type.Literal("health")], { description: "validate-artifacts | phase-completeness | consistency | gap | uat | audit-open | stats | health" }),
     phase: Type.Optional(Type.String({ description: "Phase number (for phase-completeness)." })),
   },
   { additionalProperties: false },
@@ -677,6 +678,7 @@ const entry = definePluginEntry({
             case "gap": return gapCheck(dir);
             case "uat": return { ok: true, phases: scanUat(dir) };
             case "audit-open": return { ok: true, ...auditOpen(dir) };
+            case "stats": return { ok: true, ...projectStats(dir) };
             case "health": return validateHealth(dir);
             default: return { ok: false, error: `unknown op: ${args?.op}` };
           }
