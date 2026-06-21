@@ -29,7 +29,7 @@ import { detectGsdInstall } from "../src/retrieval/detect.ts";
 import { generateCorpus } from "./build-corpus.ts";       // re-snapshots the corpus from the install
 import { generateRoster } from "./port-agents.ts";          // re-ports the 33 personas
 import { defaultGsdConfig } from "../src/engine/config.ts";  // for config-key drift
-import { PORTED_GSD_VERSION } from "../src/version.ts";
+import { PORTED_GSD_VERSION, cmpSemver } from "../src/version.ts";
 import type { GsdCorpus, CorpusManifest } from "../src/retrieval/types.ts";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -49,16 +49,6 @@ function installedGsdVersion(): { version: string; root: string; cli: string } |
 }
 
 /** Numeric semver compare. Returns -1 / 0 / 1 (a<b / a==b / a>b); non-semver falls back to string compare. */
-function cmpSemver(a: string, b: string): number {
-  const pa = a.split(/[.+-]/).map(Number);
-  const pb = b.split(/[.+-]/).map(Number);
-  if (pa.some(Number.isNaN) || pb.some(Number.isNaN)) return a === b ? 0 : a < b ? -1 : 1;
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (d !== 0) return d < 0 ? -1 : 1;
-  }
-  return 0;
-}
 
 // ── 2. drift diffing ──────────────────────────────────────────────────────────
 

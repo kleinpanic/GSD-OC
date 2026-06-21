@@ -93,10 +93,11 @@ const RECALL_AT_10_DEGRADED = 0.55; // lexical+trigram alone cannot bridge "flak
 async function checkRetrieval(): Promise<Pillar> {
   const semantic = embedAvailable(process.env);
   const checks: Check[] = [];
-  let hit5 = 0, hit10 = 0, ltHit10 = 0, ltN = 0;
+  let hit5 = 0, hit10 = 0, ltHit10 = 0, ltN = 0, returnedAny = 0;
   let degradedRanking = false;
   for (const c of RETRIEVAL_CASES) {
     const res = await retrieve(c.intent, { topK: 10 });
+    if (res.length >= 1) returnedAny++; // BLOCKER: actually MEASURE the "returns results" check, don't hardcode it
     if (semantic && !res.some((r) => (r.modalities ?? []).includes("semantic"))) degradedRanking = true;
     const rank = res.findIndex((r) => c.expect.test(r.docId.toLowerCase())) + 1;
     if (rank >= 1 && rank <= 5) hit5++;
@@ -110,8 +111,8 @@ async function checkRetrieval(): Promise<Pillar> {
   const degraded = !semantic || degradedRanking;
   const bar = degraded ? RECALL_AT_10_DEGRADED : RECALL_AT_10_FULL;
 
-  checks.push({ name: "retrieve() returns results for every intent", ok: true,
-    detail: `${n}/${n} intents returned ≥1 doc` });
+  checks.push({ name: "retrieve() returns results for every intent", ok: returnedAny === n,
+    detail: `${returnedAny}/${n} intents returned ≥1 doc` });
   checks.push({ name: `recall@10 ≥ ${bar}`, ok: recall10 >= bar,
     detail: `recall@10=${recall10.toFixed(2)} recall@5=${(hit5 / n).toFixed(2)}` });
   checks.push({ name: "long-tail (flaky→debug etc.) recall@10 ≥ bar", ok: ltRecall10 >= bar,
