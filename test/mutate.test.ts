@@ -140,3 +140,10 @@ test("WR-01: a CRLF file keeps CRLF endings after a mutation (not rewritten to L
   const lf = setProgressFields("---\nprogress:\n  total_plans: 2\n---\n", { total_plans: 5 });
   assert.ok(!/\r/.test(lf), "LF file stays LF");
 });
+
+test("WR-01: a MIXED-ending file normalizes to LF (bare LF lines not promoted to CRLF)", () => {
+  const mixed = "---\r\nstatus: planning\nprogress:\r\n  total_plans: 2\n---\r\n"; // mix of \r\n and \n
+  const out = setProgressFields(mixed, { total_plans: 5 });
+  assert.match(out, /total_plans: 5/);
+  assert.ok(!/\r/.test(out), "mixed-ending file normalized to LF, no bare-LF promotion");
+});
