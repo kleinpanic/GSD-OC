@@ -18,6 +18,7 @@ import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mut
 import { suggestFlags } from "./orchestrate/flags.js";
 import { VERB_TO_SUBAGENT } from "./orchestrate/execute-path.js";
 import { resolveAgentOptional } from "./agents/index.js";
+import { resolveWorkstreamDir, listWorkstreams, createWorkstream, switchWorkstream, completeWorkstream, suggestWorkstream, activeWorkstream } from "./engine/workstream.js";
 import { executePath, makeSubagentDispatcher } from "./orchestrate/execute-path.js";
 
 const PLUGIN_ID = "gsd-oc";
@@ -29,6 +30,17 @@ const RETRIEVE_TOOL = "gsd_retrieve";
 const SETTINGS_TOOL = "gsd_settings";
 const STATE_TOOL = "gsd_state";
 const COMMAND_TOOL = "gsd_command";
+const WORKSTREAM_TOOL = "gsd_workstream";
+
+/** TypeBox schema for gsd_workstream — manage parallel GSD tracks (list/create/switch/complete/suggest). */
+const workstreamParams = Type.Object(
+  {
+    op: Type.String({ description: "list | create | switch | complete | suggest | active" }),
+    name: Type.Optional(Type.String({ description: "Workstream name (for create/switch/complete)." })),
+    intent: Type.Optional(Type.String({ description: "For 'suggest': the coding intent → the track it belongs to." })),
+  },
+  { additionalProperties: false },
+);
 
 /** TypeBox schema for gsd_command — invoke ANY individual GSD command/skill by name, with intent-driven flags. */
 const commandParams = Type.Object(
@@ -379,7 +391,8 @@ const entry = definePluginEntry({
         // carries NO workspaceDir (SDK limit), so when cwd isn't the workspace (gateway home) this falls
         // back to cwd-relative .planning. The robust state-advance channel is agent_end (workspaceDir) — SDK-03.
         const root = gsdProjectRoot(process.cwd()); // single walk reused below (IN-01)
-        const dir = root ? `${root}/.planning` : ".planning";
+        const base = root ? `${root}/.planning` : ".planning";
+        const dir = resolveWorkstreamDir(base); // operate on the ACTIVE workstream track (or root .planning)
         try {
           switch (args?.op) {
             case "set-status":
@@ -396,6 +409,40 @@ const entry = definePluginEntry({
             default: return { ok: false, error: `unknown op: ${args?.op}` };
           }
           return { ok: true, op: args.op, planningDir: dir };
+        } catch (e) {
+          return { ok: false, error: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    } as never);
+
+    // Workstreams — parallel GSD tracks. Wires src/engine/workstream.ts (was dead code) to a tool + threads
+    // resolveWorkstreamDir into gsd_state so state mutations hit the ACTIVE track. 0 Discord slots.
+    api.registerTool({
+      name: WORKSTREAM_TOOL,
+      label: "GSD Workstream",
+      description:
+        "Manage parallel GSD workstreams (op: list | create | switch | complete | active | suggest). Each is an independent .planning/workstreams/<name>/ track with its own STATE/ROADMAP/phases. 'suggest' maps a coding intent to the track it belongs to (dynamic adoption).",
+      parameters: workstreamParams,
+      async execute(_toolCallId: string, args: { op?: string; name?: string; intent?: string }, _signal?: unknown) {
+        const root = gsdProjectRoot(process.cwd());
+        const base = root ? `${root}/.planning` : ".planning";
+        try {
+          switch (args?.op) {
+            case "list": return { ok: true, active: activeWorkstream(base), workstreams: listWorkstreams(base).map((w) => ({ name: w.name, active: w.active, status: w.status })) };
+            case "active": return { ok: true, active: activeWorkstream(base) };
+            case "create":
+              if (!args.name) return { ok: false, error: "create requires a name" };
+              return { ok: true, ...createWorkstream(base, args.name) };
+            case "switch":
+              if (!args.name) return { ok: false, error: "switch requires a name" };
+              return { ok: true, active: switchWorkstream(base, args.name) };
+            case "complete":
+              if (!args.name) return { ok: false, error: "complete requires a name" };
+              return { ok: true, ...completeWorkstream(base, args.name) };
+            case "suggest":
+              return { ok: true, suggested: suggestWorkstream(args.intent ?? "", base) };
+            default: return { ok: false, error: `unknown op: ${args?.op}` };
+          }
         } catch (e) {
           return { ok: false, error: e instanceof Error ? e.message : String(e) };
         }
@@ -508,6 +555,12 @@ Object.defineProperty(entry, toolPluginMetadataSymbol, {
         name: COMMAND_TOOL,
         label: "GSD Command",
         description: "Invoke any individual GSD command/skill by name with intent-inferred flags — 0 slots.",
+        parameters: { type: "object", additionalProperties: false, properties: {} },
+      },
+      {
+        name: WORKSTREAM_TOOL,
+        label: "GSD Workstream",
+        description: "Manage parallel GSD workstreams (list/create/switch/complete/suggest) — 0 slots.",
         parameters: { type: "object", additionalProperties: false, properties: {} },
       },
       {
