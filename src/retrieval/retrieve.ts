@@ -123,5 +123,12 @@ export async function retrieve(query: string, opts: RetrieveOptions = {}): Promi
     }
   });
   const docs = rollup(rrf(lists, opts.k ?? RRF_K, weights), corpus).slice(0, topK);
-  return docs.map((d) => ({ ...d, modalities: [...(modByChunk.get(d.topChunkId) ?? [])] }));
+  // #4: union the modalities across ALL of the doc's contributing chunks, not just topChunkId — otherwise a doc
+  // that semantic surfaced but which lost the per-doc top-chunk race to lexical dropped "semantic" from its
+  // modalities, producing a FALSE `degraded` signal even when semantic was fully operational.
+  return docs.map((d) => {
+    const mods = new Set<string>();
+    for (const cid of d.chunkIds) for (const m of modByChunk.get(cid) ?? []) mods.add(m);
+    return { ...d, modalities: [...mods] };
+  });
 }

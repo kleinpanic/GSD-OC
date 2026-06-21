@@ -42,3 +42,29 @@ test("#5: instructionFor emits a STOP notice for terminal actions, never 'procee
   // a normal mechanical action still advances
   assert.match(instructionFor({ action: "execute-phase", phase: "2" } as never), /Proceed.*execute-phase.*phase 2/);
 });
+
+test("#4: rollup records ALL contributing chunks so modalities union (no false-degraded)", async () => {
+  const { rollup } = await import("../src/retrieval/rollup.js");
+  const corpus = {
+    docs: [],
+    chunks: [
+      { id: "d1#a", docId: "d1", kind: "workflow", title: "T", text: "" },
+      { id: "d1#b", docId: "d1", kind: "workflow", title: "T", text: "" },
+    ],
+    manifest: {},
+  } as never;
+  // both chunks of d1 appear; the LOWER-scored one (d1#b) is semantic-surfaced, the top one (d1#a) lexical
+  const out = rollup([{ chunkId: "d1#a", score: 0.9 }, { chunkId: "d1#b", score: 0.4 }], corpus);
+  assert.equal(out.length, 1);
+  assert.deepEqual(out[0].chunkIds.sort(), ["d1#a", "d1#b"], "both contributing chunks recorded for the modality union");
+  assert.equal(out[0].topChunkId, "d1#a", "top chunk is the higher-scored one");
+});
+
+test("#6: runExecuteWave fails fast on an unknown dependency id (planner typo)", async () => {
+  const { runExecuteWave } = await import("../src/orchestrate/parallel-plan.js");
+  const units = [
+    { planId: "A", worktreeName: "wA", dependsOn: [] },
+    { planId: "B", worktreeName: "wB", dependsOn: ["NOPE"] }, // phantom dep
+  ];
+  await assert.rejects(runExecuteWave(units, async (u) => ({ unit: u, status: "merged" })), /unknown unit/);
+});

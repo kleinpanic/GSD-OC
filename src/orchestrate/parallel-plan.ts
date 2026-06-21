@@ -76,6 +76,12 @@ export async function runExecuteWave(
   opts: WaveOptions = {},
 ): Promise<WaveResult> {
   if (units.length === 0) return { units: [], allMerged: true, failedUnits: [] };
+  // #6: fail FAST on an unknown dependency id (a planner typo) — otherwise the barrier waits on a phantom that never
+  // merges and the unit fails with a misleading "dependency X did not merge". A dep must name a real unit.
+  const ids = new Set(units.map((u) => u.planId));
+  for (const u of units)
+    for (const d of u.dependsOn)
+      if (!ids.has(d)) throw new Error(`runExecuteWave: unit ${u.planId} depends on unknown unit ${JSON.stringify(d)}`);
   const cap = Math.max(1, Math.min(opts.maxConcurrency ?? Math.min(units.length, 4), 16));
   const ready = topoOrder(units);
   const results = new Map<string, UnitResult>();

@@ -13,6 +13,10 @@ export interface DocResult {
   title: string;
   score: number;
   topChunkId: string;
+  /** EVERY chunk of this doc that appeared in the fused results — so a caller can union the modalities that
+   *  contributed to the doc, not just those on topChunkId (#4: a doc surfaced by semantic that LOST the top-chunk
+   *  race to lexical otherwise dropped "semantic" from its modalities → a false `degraded` signal). */
+  chunkIds: string[];
 }
 
 export function rollup(fusedChunks: ScoredChunk[], corpus: GsdCorpus): DocResult[] {
@@ -24,14 +28,15 @@ export function rollup(fusedChunks: ScoredChunk[], corpus: GsdCorpus): DocResult
     const chunk = byId.get(chunkId);
     if (!chunk) continue;
     const cur = best.get(chunk.docId);
-    if (!cur || score > cur.score) {
-      best.set(chunk.docId, {
-        docId: chunk.docId,
-        kind: chunk.kind,
-        title: chunk.title,
-        score,
-        topChunkId: chunk.id,
-      });
+    if (!cur) {
+      best.set(chunk.docId, { docId: chunk.docId, kind: chunk.kind, title: chunk.title, score, topChunkId: chunk.id, chunkIds: [chunk.id] });
+    } else {
+      cur.chunkIds.push(chunk.id); // record every contributing chunk for the modality union (#4)
+      if (score > cur.score) {
+        cur.score = score;
+        cur.topChunkId = chunk.id;
+        cur.title = chunk.title;
+      }
     }
   }
 
