@@ -119,3 +119,12 @@ test("drive: a QUICK intent dispatches FAR fewer subagents (fast — no over-orc
   assert.equal(r.completed, true);
   assert.ok(runs.length <= 2, `quick path dispatches <=2 subagents (got ${runs.length}) — completes fast`);
 });
+
+test("BL-01: embedded-auth intents activate the secure stage (OAuth/password/jwt/SSO)", () => {
+  for (const i of ["add OAuth login", "add a password reset endpoint", "validate the jwt token", "wire up SSO"]) {
+    const p = selectPath({ intent: i, retrieved: [] });
+    assert.ok(p.some((s) => s.verb === "secure"), `"${i}" must include the secure stage`);
+  }
+  // a non-security feature does NOT get secure (no false-positive)
+  assert.ok(!selectPath({ intent: "add a dark mode toggle", retrieved: [] }).some((s) => s.verb === "secure"));
+});
