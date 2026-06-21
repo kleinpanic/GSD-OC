@@ -124,6 +124,29 @@ export function validateConsistency(planningDir: string): VerifyResult {
   return { ok: defects.length === 0, defects };
 }
 
+/** gap-checker — every REQ-ID in REQUIREMENTS.md should be referenced by some phase (ROADMAP phase block or a
+ *  phase PLAN). Returns the uncovered REQ-IDs as defects so post-planning gaps surface before execution. */
+export function gapCheck(planningDir: string): VerifyResult & { uncovered: string[] } {
+  const req = read(planningDir, "REQUIREMENTS.md") ?? "";
+  const ids = [...new Set([...req.matchAll(/\b([A-Z]{2,}-\d+)\b/g)].map((m) => m[1]))];
+  const roadmap = read(planningDir, "ROADMAP.md") ?? "";
+  // gather all PLAN.md text across phases (where coverage is actually planned)
+  let planText = "";
+  try {
+    for (const d of fs.readdirSync(path.join(planningDir, "phases"), { withFileTypes: true })) {
+      if (!d.isDirectory()) continue;
+      for (const f of fs.readdirSync(path.join(planningDir, "phases", d.name))) {
+        if (/PLAN\.md$/.test(f)) planText += "\n" + (read(planningDir, path.join("phases", d.name, f)) ?? "");
+      }
+    }
+  } catch {
+    /* no phases yet */
+  }
+  const haystack = roadmap + planText;
+  const uncovered = ids.filter((id) => !new RegExp(`\\b${id}\\b`).test(haystack));
+  return { ok: uncovered.length === 0, defects: uncovered.map((id) => ({ artifact: "REQUIREMENTS", missing: `${id} not covered by any phase` })), uncovered };
+}
+
 /** validate.health — a one-call rollup: artifacts valid + no inconsistency. */
 export function validateHealth(planningDir: string): VerifyResult {
   const a = validateArtifacts(planningDir);

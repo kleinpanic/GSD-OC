@@ -7,6 +7,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { assertWithinRoot } from "./security.js";
 
 const PHASE_RE = /^#{2,4}\s*Phase\s+(\d+(?:\.\d+)*)\s*:\s*(.+)$/gim;
 
@@ -59,7 +60,7 @@ export function addPhase(
 /** phase.scaffold — create `phases/NN-slug/` (zero-padded). Returns the dir. Idempotent. */
 export function scaffoldPhaseDir(planningDir: string, num: number | string, name: string): string {
   const padded = String(num).padStart(2, "0");
-  const dir = path.join(planningDir, "phases", `${padded}-${phaseSlug(name)}`);
+  const dir = assertWithinRoot(path.join(planningDir, "phases"), `${padded}-${phaseSlug(name)}`); // containment guard
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

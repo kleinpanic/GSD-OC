@@ -16,8 +16,10 @@ import { readGsdConfig, bootstrapGsdConfig } from "./engine/config.js";
 import { enforceToolGate, enforceSpawnPersona, gsdProjectRoot } from "./hooks/enforce-gate.js";
 import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
 import { addPhase, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone } from "./engine/lifecycle.js";
-import { validateArtifacts, verifyPhaseCompleteness, validateConsistency, validateHealth } from "./engine/verify.js";
+import { validateArtifacts, verifyPhaseCompleteness, validateConsistency, validateHealth, gapCheck } from "./engine/verify.js";
 import { pauseWork, resumeWork, writeThread, listThreads, closeThread, capture } from "./engine/session.js";
+import { addLearning, queryLearnings, pruneLearnings } from "./engine/learnings.js";
+import { scanInjection } from "./engine/security.js";
 import { suggestFlags } from "./orchestrate/flags.js";
 import { VERB_TO_SUBAGENT } from "./orchestrate/execute-path.js";
 import { resolveAgentOptional } from "./agents/index.js";
@@ -36,6 +38,20 @@ const COMMAND_TOOL = "gsd_command";
 const WORKSTREAM_TOOL = "gsd_workstream";
 const VERIFY_TOOL = "gsd_verify";
 const SESSION_TOOL = "gsd_session";
+const LEARNINGS_TOOL = "gsd_learnings";
+
+/** TypeBox schema for gsd_learnings — cross-project knowledge store (add/query/prune). */
+const learningsParams = Type.Object(
+  {
+    op: Type.String({ description: "add | query | prune" }),
+    kind: Type.Optional(Type.String({ description: "decision | lesson | pattern (for add/query)." })),
+    text: Type.Optional(Type.String({ description: "For add: the learning; for query: the search text." })),
+    tags: Type.Optional(Type.Array(Type.String())),
+    tag: Type.Optional(Type.String({ description: "For query: filter by tag." })),
+    keep: Type.Optional(Type.Number({ description: "For prune: how many recent entries to keep." })),
+  },
+  { additionalProperties: false },
+);
 
 /** TypeBox schema for gsd_session — pause/resume + thread + capture lifecycle features. */
 const sessionParams = Type.Object(
@@ -54,7 +70,7 @@ const sessionParams = Type.Object(
 /** TypeBox schema for gsd_verify — native integrity checks (validate-artifacts gate + verify/validate verbs). */
 const verifyParams = Type.Object(
   {
-    op: Type.String({ description: "validate-artifacts | phase-completeness | consistency | health" }),
+    op: Type.String({ description: "validate-artifacts | phase-completeness | consistency | gap | health" }),
     phase: Type.Optional(Type.String({ description: "Phase number (for phase-completeness)." })),
   },
   { additionalProperties: false },
@@ -383,6 +399,7 @@ const entry = definePluginEntry({
       async execute(_toolCallId: string, args: { command?: string; flags?: string; intent?: string }, _signal?: unknown) {
         const command = (args?.command ?? "").trim().replace(/^\/+/, "").replace(/^gsd-/, "");
         if (!command) return { ok: false, error: "command is required" };
+        const injection = scanInjection(`${command} ${args?.intent ?? ""} ${args?.flags ?? ""}`);
         const subagent =
           VERB_TO_SUBAGENT[command] ??
           (resolveAgentOptional(`gsd-${command}`) ? `gsd-${command}` : resolveAgentOptional(command) ? command : null);
@@ -405,6 +422,7 @@ const entry = definePluginEntry({
           subagent,
           flags,
           workflow,
+          ...(injection.length ? { injection_warning: injection } : {}),
           how_to_run: subagent
             ? `Dispatch the '${subagent}' subagent (your sessions_spawn) with task: "${command}${flags.length ? " " + flags.join(" ") : ""}". The GSD persona is auto-injected by the enforce-gate.`
             : `No mapped subagent — retrieve the workflow '${workflow ?? `workflow:${command}`}' and execute its steps with the flags.`,
@@ -525,6 +543,7 @@ const entry = definePluginEntry({
               if (!args.phase) return { ok: false, error: "phase-completeness requires phase" };
               return verifyPhaseCompleteness(dir, args.phase);
             case "consistency": return validateConsistency(dir);
+            case "gap": return gapCheck(dir);
             case "health": return validateHealth(dir);
             default: return { ok: false, error: `unknown op: ${args?.op}` };
           }
@@ -560,6 +579,28 @@ const entry = definePluginEntry({
             case "capture":
               if (!args.text) return { ok: false, error: "capture requires text" };
               return { ok: capture(dir, args.text, args.type) };
+            default: return { ok: false, error: "unknown op: " + args?.op };
+          }
+        } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+      },
+    } as never);
+
+    // OCT-W4: gsd_learnings — cross-project knowledge store (decisions/lessons/patterns). 0 slots.
+    api.registerTool({
+      name: LEARNINGS_TOOL,
+      label: "GSD Learnings",
+      description: "Cross-project GSD knowledge store (op: add | query | prune). Captures decisions/lessons/patterns so insight carries across projects.",
+      parameters: learningsParams,
+      async execute(_id: string, args: { op?: string; kind?: string; text?: string; tags?: string[]; tag?: string; keep?: number }, _sig?: unknown) {
+        try {
+          switch (args?.op) {
+            case "add":
+              if (!args.text) return { ok: false, error: "add requires text" };
+              return { ok: true, learning: addLearning({ kind: (args.kind as never) ?? "lesson", text: args.text, tags: args.tags }) };
+            case "query":
+              return { ok: true, results: queryLearnings({ text: args.text, kind: args.kind as never, tag: args.tag }) };
+            case "prune":
+              return { ok: true, removed: pruneLearnings(args.keep ?? 200) };
             default: return { ok: false, error: "unknown op: " + args?.op };
           }
         } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
@@ -672,6 +713,12 @@ Object.defineProperty(entry, toolPluginMetadataSymbol, {
         name: COMMAND_TOOL,
         label: "GSD Command",
         description: "Invoke any individual GSD command/skill by name with intent-inferred flags — 0 slots.",
+        parameters: { type: "object", additionalProperties: false, properties: {} },
+      },
+      {
+        name: LEARNINGS_TOOL,
+        label: "GSD Learnings",
+        description: "Cross-project knowledge store (decisions/lessons/patterns) — 0 slots.",
         parameters: { type: "object", additionalProperties: false, properties: {} },
       },
       {
