@@ -8,6 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { assertWithinRoot } from "./security.js";
+import { type Clock, realClock } from "./state.js";
 
 const PHASE_RE = /^#{2,4}[ \t]*Phase[ \t]+(\d+(?:\.\d+)*)[ \t]*:[ \t]*([^\n]*)$/gim;
 
@@ -128,15 +129,139 @@ export function markRequirementComplete(planningDir: string, reqId: string): boo
 }
 
 /** milestone.complete / cleanup — archive `phases/` into `milestones/<version>-phases/`. Returns the archive dir. */
-export function completeMilestone(planningDir: string, version: string): { archived: boolean; dir: string } {
+/** Extract a SUMMARY one-liner: frontmatter `one-liner` field, else the first bold span after the first heading. */
+function extractOneLiner(content: string): string | null {
+  const normalized = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const fm = /^---\n([\s\S]*?)\n---/.exec(normalized);
+  if (fm) {
+    const m = /^[ \t]*one-liner:[ \t]*(.+)$/im.exec(fm[1]);
+    if (m) return m[1].trim().replace(/^["']|["']$/g, "") || null;
+  }
+  const body = normalized.replace(/^---\n[\s\S]*?\n---\n*/, "");
+  const match = body.match(/^#[^\n]*\n+\*\*([^*\n]+)\*\*([^\n]*)/m);
+  if (!match) return null;
+  const boldInner = match[1].trim();
+  // Labeled form ("**One-liner:** prose") → capture prose after the colon; bare form → the bold span itself.
+  if (/:\s*$/.test(boldInner)) {
+    const prose = match[2].trim();
+    return prose.length > 0 ? prose : null;
+  }
+  return boldInner.length > 0 ? boldInner : null;
+}
+
+/** Count tasks in a SUMMARY: prefer `**Tasks:** N`, then `<task` XML tags, then `## Task N` headers. */
+function countTasks(content: string): number {
+  const field = content.match(/\*\*Tasks:\*\*\s*(\d+)/);
+  if (field) return parseInt(field[1], 10);
+  const xml = content.match(/<task[\s>]/gi)?.length ?? 0;
+  const md = content.match(/##\s*Task\s*\d+/gi)?.length ?? 0;
+  return xml || md;
+}
+
+export interface MilestoneSummary {
+  version: string;
+  name: string;
+  shipped: string;
+  phaseCount: number;
+  totalPlans: number;
+  totalTasks: number;
+  accomplishments: string[];
+  archived: string[];
+}
+
+/**
+ * Generate the milestone summary (native port of upstream `milestone complete`'s summary half): scan the
+ * milestone's phases for stats (phase/plan/task counts + SUMMARY one-liners), archive ROADMAP + REQUIREMENTS
+ * into `.planning/milestones/`, and write/prepend a reverse-chronological entry to MILESTONES.md. Does NOT move
+ * the phases dir — that's `completeMilestone`'s separate concern. Phase scoping is all-current-phases (correct
+ * for single-milestone projects; multi-milestone ROADMAP scoping is a future refinement).
+ */
+export function milestoneSummary(
+  planningDir: string,
+  version: string,
+  opts: { name?: string; clock?: Pick<Clock, "now"> } = {},
+): MilestoneSummary {
   const v = (version ?? "").replace(/[^\w.-]/g, "") || "v0";
+  const name = opts.name || v;
+  const today = new Date((opts.clock ?? realClock).now()).toISOString().split("T")[0];
+  const archiveDir = path.join(planningDir, "milestones");
+  fs.mkdirSync(archiveDir, { recursive: true });
+
+  let phaseCount = 0,
+    totalPlans = 0,
+    totalTasks = 0;
+  const accomplishments: string[] = [];
+  const phasesDir = path.join(planningDir, "phases");
+  try {
+    for (const d of fs.readdirSync(phasesDir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (!d.isDirectory()) continue;
+      phaseCount++;
+      const files = fs.readdirSync(path.join(phasesDir, d.name));
+      totalPlans += files.filter((f) => /-PLAN\.md$/.test(f) || f === "PLAN.md").length;
+      for (const s of files.filter((f) => /-SUMMARY\.md$/.test(f) || f === "SUMMARY.md")) {
+        try {
+          const content = fs.readFileSync(path.join(phasesDir, d.name, s), "utf8");
+          const oneLiner = extractOneLiner(content);
+          if (oneLiner) accomplishments.push(oneLiner);
+          totalTasks += countTasks(content);
+        } catch {
+          /* unreadable summary — skip */
+        }
+      }
+    }
+  } catch {
+    /* no phases */
+  }
+
+  const archived: string[] = [];
+  const roadmap = path.join(planningDir, "ROADMAP.md");
+  if (fs.existsSync(roadmap)) {
+    fs.writeFileSync(path.join(archiveDir, `${v}-ROADMAP.md`), fs.readFileSync(roadmap, "utf8"));
+    archived.push(`${v}-ROADMAP.md`);
+  }
+  const req = path.join(planningDir, "REQUIREMENTS.md");
+  if (fs.existsSync(req)) {
+    const header = `# Requirements Archive: ${v} ${name}\n\n**Archived:** ${today}\n**Status:** SHIPPED\n\nFor current requirements, see \`.planning/REQUIREMENTS.md\`.\n\n---\n\n`;
+    fs.writeFileSync(path.join(archiveDir, `${v}-REQUIREMENTS.md`), header + fs.readFileSync(req, "utf8"));
+    archived.push(`${v}-REQUIREMENTS.md`);
+  }
+
+  const list = accomplishments.map((a) => `- ${a}`).join("\n");
+  const entry = `## ${v} ${name} (Shipped: ${today})\n\n**Phases completed:** ${phaseCount} phases, ${totalPlans} plans, ${totalTasks} tasks\n\n**Key accomplishments:**\n${list || "- (none recorded)"}\n\n---\n\n`;
+  const milestonesPath = path.join(planningDir, "MILESTONES.md");
+  let existing = "";
+  try {
+    existing = fs.readFileSync(milestonesPath, "utf8");
+  } catch {
+    /* none */
+  }
+  if (!existing.trim()) {
+    fs.writeFileSync(milestonesPath, `# Milestones\n\n${entry}`);
+  } else {
+    // Insert after the header line(s) for reverse-chronological order (newest first).
+    const headerMatch = existing.match(/^(#{1,3}\s+[^\n]*\n\n?)/);
+    if (headerMatch) fs.writeFileSync(milestonesPath, headerMatch[1] + entry + existing.slice(headerMatch[1].length));
+    else fs.writeFileSync(milestonesPath, entry + existing);
+  }
+
+  return { version: v, name, shipped: today, phaseCount, totalPlans, totalTasks, accomplishments, archived };
+}
+
+export function completeMilestone(
+  planningDir: string,
+  version: string,
+  opts: { name?: string; clock?: Pick<Clock, "now"> } = {},
+): { archived: boolean; dir: string; summary: MilestoneSummary } {
+  const v = (version ?? "").replace(/[^\w.-]/g, "") || "v0";
+  // Generate the summary FIRST (it reads phases/) before the phases dir is archived away.
+  const summary = milestoneSummary(planningDir, v, opts);
   const phasesDir = path.join(planningDir, "phases");
   // WARNING: route the rename target through assertWithinRoot like scaffoldPhaseDir — the sanitizer already strips
   // separators, but this makes containment explicit + consistent (one regex change can't open a traversal).
   const dest = assertWithinRoot(path.join(planningDir, "milestones"), `${v}-phases`);
-  if (!fs.existsSync(phasesDir)) return { archived: false, dir: dest };
+  if (!fs.existsSync(phasesDir)) return { archived: false, dir: dest, summary };
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.renameSync(phasesDir, dest);
   fs.mkdirSync(phasesDir, { recursive: true }); // fresh phases/ for the next milestone
-  return { archived: true, dir: dest };
+  return { archived: true, dir: dest, summary };
 }

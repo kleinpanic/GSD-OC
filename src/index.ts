@@ -18,7 +18,7 @@ import { resolveProfiledConfig, applySurfaceProfile, isSurfaceProfile } from "./
 import { route as routeEngine } from "./engine/route.js";
 import { enforceToolGate, enforceSpawnPersona, gsdProjectRoot } from "./hooks/enforce-gate.js";
 import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
-import { addPhase, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone } from "./engine/lifecycle.js";
+import { addPhase, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone, milestoneSummary } from "./engine/lifecycle.js";
 import { scaffoldPlanning } from "./engine/scaffold.js";
 import { contextTemplate, artifactName } from "./engine/artifacts.js";
 import { buildProgress } from "./engine/progress.js";
@@ -118,7 +118,7 @@ const commandParams = Type.Object(
 /** TypeBox schema for the gsd_state mutation tool (ENG-WRITE-01). */
 const stateParams = Type.Object(
   {
-    op: Type.Union([Type.Literal("init"), Type.Literal("branch"), Type.Literal("commit"), Type.Literal("progress"), Type.Literal("undo"), Type.Literal("set-status"), Type.Literal("record-progress"), Type.Literal("add-decision"), Type.Literal("add-blocker"), Type.Literal("add-phase"), Type.Literal("scaffold-phase"), Type.Literal("update-plan-progress"), Type.Literal("complete-phase"), Type.Literal("complete-requirement"), Type.Literal("complete-milestone")], { description: "init | branch | commit | progress | undo | set-status | record-progress | add-decision | add-blocker | add-phase | scaffold-phase | update-plan-progress | complete-phase | complete-requirement | complete-milestone" }),
+    op: Type.Union([Type.Literal("init"), Type.Literal("branch"), Type.Literal("commit"), Type.Literal("progress"), Type.Literal("undo"), Type.Literal("set-status"), Type.Literal("record-progress"), Type.Literal("add-decision"), Type.Literal("add-blocker"), Type.Literal("add-phase"), Type.Literal("scaffold-phase"), Type.Literal("update-plan-progress"), Type.Literal("complete-phase"), Type.Literal("complete-requirement"), Type.Literal("complete-milestone"), Type.Literal("milestone-summary")], { description: "init | branch | commit | progress | undo | set-status | record-progress | add-decision | add-blocker | add-phase | scaffold-phase | update-plan-progress | complete-phase | complete-requirement | complete-milestone | milestone-summary" }),
     status: Type.Optional(Type.String({ description: "For set-status (e.g. planning|executing|complete|error)." })),
     decision: Type.Optional(Type.String({ description: "For add-decision: the decision text." })),
     blocker: Type.Optional(Type.String({ description: "For add-blocker: the blocker text." })),
@@ -621,7 +621,10 @@ const entry = definePluginEntry({
               return { ok: markRequirementComplete(dir, args.req), op: args.op };
             case "complete-milestone":
               if (!args.version) return { ok: false, error: "complete-milestone requires version" };
-              return { ok: true, op: args.op, ...completeMilestone(dir, args.version) };
+              return { ok: true, op: args.op, ...completeMilestone(dir, args.version, args.name ? { name: args.name } : {}) };
+            case "milestone-summary":
+              if (!args.version) return { ok: false, error: "milestone-summary requires version" };
+              return { ok: true, op: args.op, ...milestoneSummary(dir, args.version, args.name ? { name: args.name } : {}) };
             default: return { ok: false, error: `unknown op: ${args?.op}` };
           }
           return { ok: true, op: args.op, planningDir: dir };

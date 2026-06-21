@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addPhase, nextPhaseNumber, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone } from "../src/engine/lifecycle.js";
+import { addPhase, nextPhaseNumber, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone, milestoneSummary } from "../src/engine/lifecycle.js";
 import { setFrontmatterField } from "../src/engine/mutate.js";
 import { route } from "../src/engine/route.js";
 
@@ -63,7 +63,7 @@ test("markRequirementComplete checks off a REQ id", () => {
   } finally { rmSync(join(p, ".."), { recursive: true, force: true }); }
 });
 
-test("completeMilestone archives phases/ + resets it", () => {
+test("completeMilestone archives phases/ + resets it + returns a summary", () => {
   const p = tmpPlanning();
   try {
     scaffoldPhaseDir(p, 1, "x");
@@ -71,6 +71,37 @@ test("completeMilestone archives phases/ + resets it", () => {
     assert.ok(r.archived);
     assert.ok(existsSync(join(p, "milestones", "v1.1-phases", "01-x")), "phases archived");
     assert.ok(existsSync(join(p, "phases")), "fresh phases/ for next milestone");
+    assert.equal(r.summary.version, "v1.1");
+    assert.ok(existsSync(join(p, "MILESTONES.md")), "summary written");
+  } finally { rmSync(join(p, ".."), { recursive: true, force: true }); }
+});
+
+test("milestoneSummary aggregates stats, archives ROADMAP/REQ, prepends MILESTONES.md", () => {
+  const p = tmpPlanning("# Roadmap\n\n### Phase 1: Foundations\n**Goal:** g\n");
+  try {
+    writeFileSync(join(p, "REQUIREMENTS.md"), "- REQ-1\n");
+    const d1 = scaffoldPhaseDir(p, 1, "foundations");
+    writeFileSync(join(d1, "01-01-PLAN.md"), "# plan\n");
+    writeFileSync(join(d1, "01-01-SUMMARY.md"), "---\none-liner: Stood up the core engine.\n---\n# Summary\n\n**Tasks:** 4\n");
+    const clock = { now: () => Date.parse("2026-06-21T00:00:00Z") };
+
+    const s = milestoneSummary(p, "v1.0", { name: "Core", clock });
+    assert.equal(s.phaseCount, 1);
+    assert.equal(s.totalPlans, 1);
+    assert.equal(s.totalTasks, 4);
+    assert.deepEqual(s.accomplishments, ["Stood up the core engine."]);
+    assert.deepEqual(s.archived.sort(), ["v1.0-REQUIREMENTS.md", "v1.0-ROADMAP.md"]);
+    assert.ok(existsSync(join(p, "milestones", "v1.0-ROADMAP.md")));
+
+    const ms = readFileSync(join(p, "MILESTONES.md"), "utf8");
+    assert.match(ms, /## v1\.0 Core \(Shipped: 2026-06-21\)/);
+    assert.match(ms, /1 phases, 1 plans, 4 tasks/);
+    assert.match(ms, /- Stood up the core engine\./);
+
+    // a second milestone prepends (reverse-chronological)
+    milestoneSummary(p, "v2.0", { name: "Next", clock });
+    const ms2 = readFileSync(join(p, "MILESTONES.md"), "utf8");
+    assert.ok(ms2.indexOf("v2.0 Next") < ms2.indexOf("v1.0 Core"), "newest first");
   } finally { rmSync(join(p, ".."), { recursive: true, force: true }); }
 });
 
