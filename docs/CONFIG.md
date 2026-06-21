@@ -25,9 +25,21 @@ The native `defaultGsdConfig()` ships the complete upstream key set (read with `
 prototype-pollution-hardened). Groups:
 
 **Core:** `mode` (interactive\|auto), `model_profile` (quality\|balanced\|budget\|adaptive\|inherit),
-`model_profile_overrides` (per-agent), `effort.default`, `granularity`, `phase_naming`, `project_code`,
-`commit_docs`, `parallelization`, `search_gitignored`, `agent_skills`, `sub_repos`, `context`, and the inert
-Claude-compat keys (`resolve_model_ids`, `context_window`, `response_language`, `text_mode`).
+`model_profile_overrides` (per-agent), `model_provider`, `effort.default`, `granularity`, `phase_naming`,
+`project_code`, `commit_docs`, `parallelization`, `search_gitignored`, `agent_skills`, `sub_repos`, `context`,
+and the inert Claude-compat keys (`resolve_model_ids`, `context_window`, `response_language`, `text_mode`).
+
+### Per-agent model routing across providers
+
+The `model_profile` tiers map each GSD subagent to a tier (`opus`/`sonnet`/`haiku`). Those are **Anthropic** model
+names, and OpenClaw's default provider is OpenAI — so GSD-OC emits them **fully qualified** (`anthropic/opus`) to
+resolve on any gateway. To route per-agent under a **different provider**:
+- **Whole-fleet on your provider:** set `model_profile: "inherit"` → GSD leaves the gateway's parent model in place
+  (whatever provider you configured), so every subagent runs on your model.
+- **Per-agent explicit refs:** `model_profile_overrides: { "gsd-planner": "glm/glm-4.6", "gsd-executor": "openai/gpt-5.5" }`
+  — a value containing a `/` is a full `provider/model` ref and passes through unqualified.
+- **Re-home the tiers:** `model_provider: "<provider>"` qualifies the bare tiers under that provider (only useful if
+  it actually has models named opus/sonnet/haiku — otherwise prefer the two options above).
 
 **`workflow.*`** (the lifecycle gates/levers — managed by intent or the agent):
 `research`, `research_before_questions` (**default true**), `plan_check`/`plan_checker`, `verifier`,
