@@ -61,5 +61,12 @@ export function resolveProfiledConfig(repoRoot: string, projectConfig?: Record<s
   const surface = (projectConfig?.profiles as { surface?: string } | undefined)?.surface ?? (cfg.profiles as { surface?: string }).surface;
   if (surface && isSurfaceProfile(surface)) cfg = applySurfaceProfile(cfg, surface);
   if (projectConfig && Object.keys(projectConfig).length) cfg = mergeGsdConfig(cfg, projectConfig);
+  // #6: a typo'd/unknown surface ("ultra", "stadard") was silently kept as profiles.surface with NO preset applied —
+  // the operator believed a surface was active when none was. Normalize an unrecognized surface back to "default"
+  // (the no-preset sentinel) so the resolved config truthfully reflects that no surface preset is in effect.
+  const finalSurface = (cfg.profiles as { surface?: string }).surface;
+  if (finalSurface && finalSurface !== "default" && !isSurfaceProfile(finalSurface)) {
+    cfg = mergeGsdConfig(cfg, { profiles: { surface: "default" } });
+  }
   return cfg;
 }

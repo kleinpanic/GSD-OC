@@ -111,21 +111,30 @@ export function switchWorkstream(planningDir: string, name: string): string {
 }
 
 /** Archive a completed workstream into `workstreams/.archive/<slug>/`; clears active if it was active. */
-export function completeWorkstream(planningDir: string, name: string): { archived: boolean; slug: string } {
+export function completeWorkstream(planningDir: string, name: string): { archived: boolean; slug: string; promoted?: string | null } {
   const slug = workstreamSlug(name);
   const dir = path.join(workstreamsRoot(planningDir), slug);
   if (!fs.existsSync(dir)) return { archived: false, slug };
   const archiveDir = path.join(workstreamsRoot(planningDir), ".archive");
   fs.mkdirSync(archiveDir, { recursive: true });
   fs.renameSync(dir, path.join(archiveDir, slug));
+  let promoted: string | null = null;
   if (activeWorkstream(planningDir) === slug) {
-    try {
-      fs.rmSync(activeFile(planningDir));
-    } catch {
-      /* none */
+    // #8: completing the ACTIVE track must not orphan other live tracks. Promote the next remaining workstream to
+    // active (so route()/state keep operating on a real track); only clear `.active` (→ root .planning) if none remain.
+    const remaining = listWorkstreams(planningDir).map((w) => workstreamSlug(w.name)).filter((s) => s !== slug);
+    if (remaining.length > 0) {
+      promoted = remaining[0];
+      fs.writeFileSync(activeFile(planningDir), promoted);
+    } else {
+      try {
+        fs.rmSync(activeFile(planningDir));
+      } catch {
+        /* none */
+      }
     }
   }
-  return { archived: true, slug };
+  return { archived: true, slug, promoted };
 }
 
 /** Work-type → suggested workstream name, from intent keywords (the dynamic-adoption signal). */
@@ -134,7 +143,7 @@ const TYPE_RULES: { re: RegExp; name: string }[] = [
   { re: /\b(ui|frontend|front-end|css|component|design|dashboard|page)\b/i, name: "frontend" },
   { re: /\b(api|backend|endpoint|server|route|handler|service)\b/i, name: "backend" },
   { re: /\b(bug|debug\w*|flaky|crash\w*|regression|fix\w*|broken)\b/i, name: "fixes" },
-  { re: /\b(doc\w*|readme|changelog)\b/i, name: "docs" },
+  { re: /\b(docs?|document\w*|readme|changelog)\b/i, name: "docs" }, // not `doc\w*` — that matched "docker" → infra work mis-routed to docs
   { re: /\b(test\w*|coverage|e2e|integration test)\b/i, name: "testing" },
   { re: /\b(ai|llm|embedding|eval\w*|model|rag|agent|spark|dgx|gpu)\b/i, name: "ai" },
   { re: /\b(infra|deploy\w*|ci|cd|pipeline|docker|k8s|terraform)\b/i, name: "infra" },
