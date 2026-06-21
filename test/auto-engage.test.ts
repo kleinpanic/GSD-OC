@@ -8,7 +8,8 @@ import { autoEngageHandler, isCodingWorkspace, GSD_META_PROMPT } from "../src/ho
 import { classifyIntent } from "../src/engage/classify.js";
 
 const evt = { prompt: "do work", messages: [] };
-const codeWS = join(homedir(), "codeWS", "SomeProject");
+// A real project path follows the machine's convention: codeWS/<Lang>/<Project> (depth-2), not codeWS/<Project>.
+const codeWS = join(homedir(), "codeWS", "JavaScript", "SomeProject");
 
 test("auto-engage fires inside ~/codeWS (ENG-02)", () => {
   const ctx = { workspaceDir: codeWS };
@@ -160,4 +161,22 @@ test("CONFIG: codingRoots expands ~ and $VAR", () => {
   const cfg = resolveEngageConfig({ codingRoots: ["~/work", "$GSD_TEST_ROOT/sub"] });
   assert.ok(cfg.roots.some((r) => r.includes("/work")), "~ expanded to home");
   assert.ok(cfg.roots.some((r) => r === "/tmp/gsdtestroot/sub"), "$VAR expanded");
+});
+
+test("STRUCTURE: the default ~/codeWS root infers <Lang>/<Project> — only depth-2 is a project", async () => {
+  const { homedir } = await import("node:os");
+  const root = join(homedir(), "codeWS");
+  // root itself + the bare <Lang> layer are NOT projects (no marker) — the stray-dir-at-root class is excluded
+  assert.equal(isCodingWorkspace(root, [root]), false, "the codeWS root is not a project");
+  assert.equal(isCodingWorkspace(join(root, "JavaScript"), [root]), false, "the bare Lang layer is not a project");
+  // a real project at <root>/<Lang>/<Project> (depth 2) and deeper engages
+  assert.equal(isCodingWorkspace(join(root, "JavaScript", "GSD-OC"), [root]), true, "depth-2 is a project");
+  assert.equal(isCodingWorkspace(join(root, "JavaScript", "GSD-OC", "src"), [root]), true, "deeper still a project");
+});
+
+test("STRUCTURE: an OPERATOR-configured root is literal (any depth), unlike the convention default", () => {
+  const custom = "/srv/projects/myapp";
+  // a configured root points where the operator says — the root itself engages (no depth requirement)
+  assert.equal(isCodingWorkspace(custom, [custom]), true, "configured root engages at depth 0");
+  assert.equal(isCodingWorkspace(join(custom, "sub"), [custom]), true, "and at any depth under it");
 });

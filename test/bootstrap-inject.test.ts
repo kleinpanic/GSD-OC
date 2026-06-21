@@ -9,7 +9,8 @@ import {
   type WorkspaceBootstrapFile,
 } from "../src/engage/bootstrap-inject.js";
 
-const codeWS = join(homedir(), "codeWS", "SomeProject");
+// A real project path follows the machine's convention: codeWS/<Lang>/<Project> (depth-2).
+const codeWS = join(homedir(), "codeWS", "JavaScript", "SomeProject");
 
 function agentsFile(content = ""): WorkspaceBootstrapFile {
   return { name: "AGENTS", path: join(codeWS, "AGENTS.md"), content, missing: content === "" };

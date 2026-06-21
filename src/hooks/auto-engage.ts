@@ -68,8 +68,21 @@ export function resolveEngageConfig(pluginConfig: Record<string, unknown> | unde
   return { roots: codingWorkspaceRoots(rootsRaw, includeDefault), mode };
 }
 
-/** Filesystem markers that identify any directory as a real coding project (root-agnostic). */
-const CODING_MARKERS = [".git", "package.json", ".planning", "pyproject.toml", "Cargo.toml", "go.mod", "tsconfig.json"];
+/** Filesystem markers that identify any directory as a real coding project (root-agnostic). NOTE: `.planning` is
+ *  NOT a bare marker here — a stray non-GSD `.planning` (e.g. ~/.planning/research with no STATE/ROADMAP) would
+ *  otherwise make the walk-up treat EVERY dir under that ancestor as a coding workspace, misfiring gateway-wide.
+ *  A `.planning` only counts when it carries a GSD marker (STATE.md/ROADMAP.md) — checked separately below,
+ *  consistent with enforce-gate's gsdProjectRoot. */
+const CODING_MARKERS = [".git", "package.json", "pyproject.toml", "Cargo.toml", "go.mod", "tsconfig.json"];
+
+/** A `.planning` dir counts as a project marker ONLY if it's a real GSD project (has STATE.md or ROADMAP.md). */
+function hasGsdPlanning(dir: string): boolean {
+  try {
+    return existsSync(join(dir, ".planning", "STATE.md")) || existsSync(join(dir, ".planning", "ROADMAP.md"));
+  } catch {
+    return false;
+  }
+}
 
 /** True if `dir` (or any ANCESTOR up to the filesystem root) carries a coding-project marker.
  *  Path-independent — this is what makes auto-engage fire in agent workspaces
@@ -80,7 +93,7 @@ function hasCodingMarker(dir: string): boolean {
   try {
     let cur = resolve(dir);
     for (;;) {
-      if (CODING_MARKERS.some((m) => existsSync(join(cur, m)))) return true;
+      if (CODING_MARKERS.some((m) => existsSync(join(cur, m))) || hasGsdPlanning(cur)) return true;
       const parent = dirname(cur);
       if (parent === cur) return false; // reached filesystem root
       cur = parent;
@@ -91,21 +104,37 @@ function hasCodingMarker(dir: string): boolean {
 }
 
 /**
- * True if `dir` is a coding workspace: either inside a configured root (default ~/codeWS + pluginConfig
- * `codingRoots`), OR it carries a coding-project marker (.git/package.json/.planning/…). The marker path
- * is root-agnostic so GSD auto-engages for real projects regardless of where the agent's workspace lives.
+ * True if `dir` is a coding workspace: either a PROJECT under a configured root (the `<root>/<Lang>/<Project>`
+ * convention — depth ≥ 2 below the root, e.g. ~/codeWS/JavaScript/GSD-OC), OR it carries a coding-project marker
+ * (.git/package.json/.planning/…). The marker path is root-agnostic so GSD auto-engages for real projects wherever
+ * the agent's workspace lives.
+ *
+ * The depth rule INFERS the machine's apparent layout instead of treating any descendant as a project: the root
+ * itself (~/codeWS) and the bare language layer (~/codeWS/JavaScript) are organizational dirs, NOT projects — so
+ * GSD does not engage there, and stray dirs created directly under the root are not mistaken for projects.
  */
+export const PROJECT_DEPTH = 2; // <root>/<Lang>/<Project>
+
 export function isCodingWorkspace(
   dir: string | undefined,
   roots: string[] = codingWorkspaceRoots(), // default includes $HOME/codeWS (callers like bootstrap-inject rely on it)
 ): boolean {
   if (!dir) return false;
   const target = resolve(dir);
-  const underRoot = roots.some((root) => {
+  // A marker makes ANY dir a project (root-agnostic) — checked first so a marked dir at any depth still engages.
+  if (hasCodingMarker(target)) return true;
+  const defaultR = defaultRoot();
+  return roots.some((root) => {
     const r = resolve(root);
-    return target === r || target.startsWith(r + sep);
+    if (target !== r && !target.startsWith(r + sep)) return false;
+    // The DEFAULT ~/codeWS root follows the machine's `<root>/<Lang>/<Project>` convention: only a project-DEPTH
+    // descendant engages, so the root + the bare <Lang> layer (and stray dirs dropped at the root) are NOT mistaken
+    // for projects. An OPERATOR-CONFIGURED root is literal — they opted in deliberately and may point straight at a
+    // project, so any descendant (incl. the root itself) engages.
+    if (r !== defaultR) return true;
+    const rel = target.slice(r.length).split(sep).filter(Boolean);
+    return rel.length >= PROJECT_DEPTH;
   });
-  return underRoot || hasCodingMarker(target);
 }
 
 /** The GSD meta-prompt injected when auto-engage fires. Static guidance (cacheable). */
