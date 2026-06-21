@@ -73,7 +73,7 @@ export function comparePhaseNum(a: string, b: string): number {
 }
 
 /** Extract the leading numeric phase token from a directory name. core.cjs:774-797. */
-export function extractPhaseToken(dirName: string): string {
+function extractPhaseToken(dirName: string): string {
   const codePrefixMatch = dirName.match(/^([A-Z]{1,6})-(\d.*)/i);
   let prefix = "";
   let rest = dirName;

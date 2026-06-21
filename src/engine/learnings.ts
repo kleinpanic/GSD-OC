@@ -16,7 +16,7 @@ export interface Learning {
   project?: string;
 }
 
-export function learningsPath(root: string = path.join(os.homedir(), ".gsd-oc")): string {
+function learningsPath(root: string = path.join(os.homedir(), ".gsd-oc")): string {
   return path.join(root, "learnings.jsonl");
 }
 

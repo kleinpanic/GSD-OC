@@ -38,7 +38,7 @@ function run(repoRoot: string, argv: string[], dryRun: boolean | undefined, acc:
 }
 
 /** The directory under the repo where GSD isolation worktrees live (git-ignored by convention). */
-export function worktreesDir(repoRoot: string): string {
+function worktreesDir(repoRoot: string): string {
   return path.join(repoRoot, ".gsd-worktrees");
 }
 

@@ -23,7 +23,7 @@ export function workstreamSlug(name: string): string {
   return slug;
 }
 
-export function workstreamsRoot(planningDir: string): string {
+function workstreamsRoot(planningDir: string): string {
   return path.join(planningDir, "workstreams");
 }
 
