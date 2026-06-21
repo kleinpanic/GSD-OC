@@ -504,12 +504,12 @@ const entry = definePluginEntry({
         const dir = resolveWorkstreamDir(base);
         try {
           switch (args?.op) {
-            case "validate-artifacts": return { ok: true, ...validateArtifacts(dir) };
+            case "validate-artifacts": return validateArtifacts(dir);
             case "phase-completeness":
               if (!args.phase) return { ok: false, error: "phase-completeness requires phase" };
-              return { ok: true, ...verifyPhaseCompleteness(dir, args.phase) };
-            case "consistency": return { ok: true, ...validateConsistency(dir) };
-            case "health": return { ok: true, ...validateHealth(dir) };
+              return verifyPhaseCompleteness(dir, args.phase);
+            case "consistency": return validateConsistency(dir);
+            case "health": return validateHealth(dir);
             default: return { ok: false, error: `unknown op: ${args?.op}` };
           }
         } catch (e) {
