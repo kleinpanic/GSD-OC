@@ -24,7 +24,7 @@ test("computeSnapshot: derives the metric set from labeled A/B traces", () => {
   const snap = computeSnapshot(traces, BENCH_TASKS);
   assert.ok(Math.abs((snap["tokens.trivial.deltaPct"] ?? 0) - 0.2) < 1e-9);
   assert.equal(snap["enforce.falseAllows"], 0);
-  assert.ok(snap["behavior.score.mean"] > 0);
+  assert.ok((snap["behavior.score.mean"] ?? 0) > 0);
 });
 
 test("compareToBaseline: passes a healthy snapshot, FAILS on a false-allow regression", () => {

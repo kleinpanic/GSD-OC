@@ -16,6 +16,7 @@ import { dirname, resolve } from "node:path";
 import { route } from "../engine/route.js";
 import { optedOut } from "../engage/opt-out.js";
 import { readGsdConfig } from "../engine/config.js";
+import { resolveProfiledConfig } from "../engine/profile.js";
 import { resolveAgentOptional } from "../agents/index.js";
 
 export type BeforeToolCallEvent = { toolName: string; params?: Record<string, unknown>; derivedPaths?: readonly string[] };
@@ -102,7 +103,9 @@ export function enforceToolGate(
   if (optedOut({ cwd: projectRoot, pluginConfig: deps.pluginConfig })) return; // .gsd-off / pluginConfig opt-out
 
   const planningDir = `${projectRoot}/.planning`;
-  const { config } = readGsdConfig(planningDir);
+  // Flow-6 fix: resolve the FULL config (defaults → .gsd-profile → project → surface) so a profile that disables
+  // the gate (or a 'minimal' surface) actually reaches enforcement — not just the bare .planning/config.json.
+  const config = resolveProfiledConfig(projectRoot, readGsdConfig(planningDir).config);
   if (config.workflow?.enforce_tool_gate === false) return; // explicit per-project disable
 
   const r = route(planningDir);

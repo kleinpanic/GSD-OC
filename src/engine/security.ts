@@ -20,7 +20,11 @@ function realExistingAncestor(p: string): string {
   for (let i = 0; i < 64; i++) {
     try {
       return fs.realpathSync(dir);
-    } catch {
+    } catch (e) {
+      // H-2: ONLY walk up when the component genuinely doesn't exist yet (ENOENT/ENOTDIR). On ELOOP (symlink
+      // cycle) / EACCES (untraversable) the real target is unknown — fail CLOSED rather than guessing an ancestor.
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT" && code !== "ENOTDIR") throw new Error(`path not resolvable (${code}): ${dir}`);
       const parent = path.dirname(dir);
       if (parent === dir) return dir;
       dir = parent;

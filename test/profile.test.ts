@@ -47,3 +47,13 @@ test("gsd_settings profile op resolves a surface profile live", async () => {
   assert.equal(r.surface, "minimal");
   assert.equal((r.workflow as Record<string, unknown>).code_review, false, "minimal surface disables code_review");
 });
+
+test("L-2: project config WINS over the surface preset it selects", () => {
+  const d = mkdtempSync(join(tmpdir(), "gsd-l2-"));
+  try {
+    // project selects surface:full (which sets ui_review:true) but explicitly overrides ui_review:false
+    const cfg = resolveProfiledConfig(d, { profiles: { surface: "full" } as never, workflow: { ui_review: false } as never });
+    assert.equal((cfg.workflow as Record<string, unknown>).security_asvs_level, 2, "surface 'full' applied");
+    assert.equal((cfg.workflow as Record<string, unknown>).ui_review, false, "project override WINS over the surface preset");
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});

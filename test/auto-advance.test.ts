@@ -80,3 +80,13 @@ test("decideFinalize: drives THROUGH a human gate only when autoGates (/goal mod
   const done = { route: "complete-milestone", action: "complete-milestone", phase: null, reason: "" } as never;
   assert.equal(decideFinalize(ev as never, done, { autoGates: true }).action, "continue");
 });
+
+test("C-2: verify-work NEVER auto-drives without explicit autoVerify (autoGates alone is not enough)", () => {
+  const ev = { sessionId: "s", stopHookActive: false };
+  const verify = { route: "verify-work", action: "verify-work", phase: "1", reason: "" } as never;
+  assert.equal(decideFinalize(ev as never, verify, { autoGates: true }).action, "continue", "autoGates alone stops at verify");
+  assert.equal(decideFinalize(ev as never, verify, { autoGates: true, autoVerify: true }).action, "revise", "explicit autoVerify drives it");
+  // discuss still auto-drives with just autoGates
+  const discuss = { route: "discuss", action: "discuss-phase", phase: "1", reason: "" } as never;
+  assert.equal(decideFinalize(ev as never, discuss, { autoGates: true }).action, "revise");
+});

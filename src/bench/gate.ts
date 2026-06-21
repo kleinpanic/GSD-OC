@@ -11,12 +11,12 @@ import type { BenchTask } from "./tasks.js";
 
 export interface Snapshot {
   "tokens.trivial.deltaPct": number | null;
-  "behavior.score.mean": number;
-  "skill.recall.mean": number;
+  "behavior.score.mean": number | null;
+  "skill.recall.mean": number | null;
   "enforce.falseAllows": number;
-  "rot.redundantReads.max": number;
-  "overOrch.rate": number;
-  "lifecycle.completion": number;
+  "rot.redundantReads.max": number | null;
+  "overOrch.rate": number | null;
+  "lifecycle.completion": number | null;
 }
 
 /** Compute the metric snapshot from the A/B traces + the task labels (for expected-subagent recall). */
@@ -28,14 +28,16 @@ export function computeSnapshot(traces: TaskTrace[], tasks: BenchTask[]): Snapsh
   const recalls = onTraces.map((t) => skillScore(t, byId.get(t.taskId)?.expectSubagents ?? []).recall);
   const rots = onTraces.map((t) => tokenRot(t).redundantReads);
   const trivial = onTraces.filter((t) => t.band === "trivial");
+  // M-2: distinguish "measured 0" from "not measured" — an empty arm is null (skipped by the gate), not a 0
+  // that would read as a regression. Only enforce.falseAllows is a true 0-on-empty (no edits ⇒ no false-allows).
   return {
     "tokens.trivial.deltaPct": ab.trivial?.deltaPct ?? null,
-    "behavior.score.mean": mean(behaviors),
-    "skill.recall.mean": mean(recalls),
+    "behavior.score.mean": behaviors.length ? mean(behaviors) : null,
+    "skill.recall.mean": recalls.length ? mean(recalls) : null,
     "enforce.falseAllows": falseAllows(traces),
-    "rot.redundantReads.max": rots.length ? Math.max(...rots) : 0,
-    "overOrch.rate": trivial.length ? trivial.filter(overOrchestrated).length / trivial.length : 0,
-    "lifecycle.completion": completionRate(onTraces),
+    "rot.redundantReads.max": rots.length ? Math.max(...rots) : null,
+    "overOrch.rate": trivial.length ? trivial.filter(overOrchestrated).length / trivial.length : null,
+    "lifecycle.completion": onTraces.length ? completionRate(onTraces) : null,
   };
 }
 
@@ -57,10 +59,14 @@ export function compareToBaseline(snap: Snapshot, baseline: Baseline): { pass: b
     const current = (snap as unknown as Record<string, number | null>)[metric];
     if (current == null) continue; // unmeasured this run (e.g. no trivial arm) — skip, don't fail
     const tol = spec.tol ?? 0;
+    // M-1: a bar without its bound field would silently no-op (the metric could never fail) — a broken regression
+    // gate. Treat a malformed spec as a regression so it fails LOUDLY instead of disabling the check.
+    const bound = spec.bar === "≥" ? spec.min : spec.bar === "≤" ? spec.max : spec.eq;
+    if (bound == null) { regressions.push({ metric: `${metric} (malformed baseline: bar ${spec.bar} without bound)`, baseline: spec.value, current, bar: spec.bar }); continue; }
     let bad = false;
-    if (spec.bar === "≥" && spec.min != null) bad = current < spec.min - tol;
-    else if (spec.bar === "≤" && spec.max != null) bad = current > spec.max + tol;
-    else if (spec.bar === "==" && spec.eq != null) bad = Math.abs(current - spec.eq) > tol; // tol-aware (floats)
+    if (spec.bar === "≥") bad = current < bound - tol;
+    else if (spec.bar === "≤") bad = current > bound + tol;
+    else if (spec.bar === "==") bad = Math.abs(current - bound) > tol; // tol-aware (floats)
     if (bad) regressions.push({ metric, baseline: spec.value, current, bar: spec.bar });
   }
   return { pass: regressions.length === 0, regressions };

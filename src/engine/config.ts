@@ -93,6 +93,7 @@ export function defaultGsdConfig(): GsdConfig {
       plan_bounce: false,
       plan_bounce_passes: 2,
       auto_advance: false,
+      auto_verify: false, // C-2: even in mode:auto, never auto-pass a human-verify gate unless this is explicitly set
       auto_prune_state: false,
       node_repair: true,
       node_repair_budget: 2,

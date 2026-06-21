@@ -3,6 +3,7 @@ import { route, type RouteResult } from "../engine/route.js";
 import { decideDispatch } from "../loop/decide.js";
 import { instructionFor } from "../orchestrate/inject.js";
 import { readGsdConfig } from "../engine/config.js";
+import { resolveProfiledConfig } from "../engine/profile.js";
 
 /**
  * `before_agent_finalize` auto-advance handler (ORCH-04; 4-RESEARCH.md:89-134, 510-531).
@@ -52,7 +53,7 @@ const MAX_REVISE_ATTEMPTS = 2;
 export function decideFinalize(
   event: BeforeAgentFinalizeEvent,
   next: RouteResult,
-  opts: { autoGates?: boolean } = {},
+  opts: { autoGates?: boolean; autoVerify?: boolean } = {},
 ): BeforeAgentFinalizeResult {
   // Loop guard (Pitfall 1): never revise while a stop hook is already active.
   if (event.stopHookActive) return { action: "continue" };
@@ -60,12 +61,16 @@ export function decideFinalize(
   const decision = decideDispatch(next);
   // Terminal (halt / complete-milestone) ALWAYS stops — never auto-advance past a halt or a completed milestone.
   if (decision.mode === "terminal") return { action: "continue" };
-  // A human gate (discuss/verify) stops for approval — UNLESS this is a /goal-style autonomous run (mode:auto /
-  // workflow.auto_advance): then we drive THROUGH the gate too (the "keep going" re-prompt). stopHookActive +
-  // maxAttempts still bound the loop.
-  if (decision.mode === "agent-driven" && !opts.autoGates) return { action: "continue" };
+  // A human gate stops for approval — UNLESS this is a /goal-style autonomous run (mode:auto / auto_advance).
+  // C-2: even then, NEVER auto-drive through `verify-work` — it's the last correctness checkpoint (a human must
+  // see a FAILED/gaps verification before ship). Only `discuss-phase` (a planning re-prompt) is safe to auto-drive,
+  // and only with an explicit `auto_verify` opt-in does verify auto-pass.
+  if (decision.mode === "agent-driven") {
+    const drivable = opts.autoGates && (next.action !== "verify-work" || opts.autoVerify);
+    if (!drivable) return { action: "continue" };
+  }
 
-  // Mechanical step (or an auto-passed gate) → revise (same-turn advance), bounded + deduped.
+  // Mechanical step (or an auto-passed discuss gate) → revise (same-turn advance), bounded + deduped.
   return {
     action: "revise",
     reason: opts.autoGates && decision.mode === "agent-driven" ? "gsd-auto-advance (autonomous gate)" : "gsd-auto-advance",
@@ -90,7 +95,10 @@ export function autoAdvanceHandler(
   const planningDir = join(base, ".planning");
   const next = route(planningDir);
   // /goal autonomy: drive through gates only when the project config opts in (mode:auto OR workflow.auto_advance).
-  const cfg = readGsdConfig(planningDir).config;
-  const autoGates = cfg.mode === "auto" || (cfg.workflow as { auto_advance?: boolean })?.auto_advance === true;
-  return decideFinalize(event, next, { autoGates });
+  // Flow-6 fix: read the FULL profiled config so a .gsd-profile / surface that sets mode:auto reaches the driver.
+  const cfg = resolveProfiledConfig(base, readGsdConfig(planningDir).config);
+  const wf = cfg.workflow as { auto_advance?: boolean; auto_verify?: boolean } | undefined;
+  const autoGates = cfg.mode === "auto" || wf?.auto_advance === true;
+  const autoVerify = wf?.auto_verify === true; // C-2: a SEPARATE opt-in; mode:auto alone never auto-passes verify
+  return decideFinalize(event, next, { autoGates, autoVerify });
 }

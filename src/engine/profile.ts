@@ -55,8 +55,11 @@ export function resolveProfiledConfig(repoRoot: string, projectConfig?: Partial<
   let cfg = defaultGsdConfig();
   const install = readInstallProfile(repoRoot);
   if (install) cfg = mergeGsdConfig(cfg, install);
-  if (projectConfig) cfg = mergeGsdConfig(cfg, projectConfig);
-  const surface = (cfg.profiles as { surface?: string } | undefined)?.surface;
+  // L-2: the surface profile is read from the merged install+project (so a project can SELECT a surface), but it
+  // is applied BEFORE the project config is layered on top — so the project's explicit keys WIN over the preset
+  // (the stated "project config is most specific" invariant). Order: defaults → install → [surface] → project.
+  const surface = (projectConfig?.profiles as { surface?: string } | undefined)?.surface ?? (cfg.profiles as { surface?: string }).surface;
   if (surface && isSurfaceProfile(surface)) cfg = applySurfaceProfile(cfg, surface);
+  if (projectConfig) cfg = mergeGsdConfig(cfg, projectConfig);
   return cfg;
 }
