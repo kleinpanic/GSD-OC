@@ -14,7 +14,9 @@
  * Matching is case-insensitive against a single lowercased, trimmed copy of the prompt.
  */
 
-export type IntentResult = { engage: boolean; category: string; reason: string };
+export type IntentResult = { engage: boolean; category: string; reason: string   /** the matched rule was a weak heuristic (suppressed under a question frame). */
+  weak?: boolean;
+};
 
 const CHAT: IntentResult = { engage: false, category: "chat", reason: "chat/quick one-off — no GSD work verb" };
 
@@ -53,7 +55,7 @@ const RULES: Array<{ re: RegExp; category: string; reason: string; weak?: boolea
   // map (do.md:44)
   { re: /\bmap\b.*\b(codebase|repo|project)\b|\bmap the\b/, category: "map", reason: "codebase mapping (do.md:44)" },
   // debug (do.md:45)
-  { re: /\b(bug|debug\w*|flaky|fail\w*|broken|broke|crash\w*|error|reproduce|intermittent|stack ?trace|exception|regression)\b/, category: "debug", reason: "bug/error/crash signal (do.md:45)" },
+  { re: /\b(bug|debug\w*|flaky|fail(ure|ed|ing|s)?|broken|broke|crash\w*|error|reproduce|intermittent|stack ?trace|exception|regression)\b/, category: "debug", reason: "bug/error/crash signal (do.md:45)" },
   // plan (do.md:53)
   { re: /\bplan\b.*\bphase\b|\bplan phase\b/, category: "plan", reason: "phase planning (do.md:53)" },
   // execute (do.md:54)
@@ -88,7 +90,7 @@ function classifyBody(text: string): IntentResult {
   for (const rule of RULES) {
     if (rule.weak && isQuestionFrame) continue; // L-01: weak heuristics yield to chat framing
     if (rule.re.test(text)) {
-      return { engage: true, category: rule.category, reason: rule.reason };
+      return { engage: true, category: rule.category, reason: rule.reason, weak: rule.weak ?? false };
     }
   }
   // No work verb matched → standalone question / chatter → skip.
@@ -100,8 +102,14 @@ export function classifyIntent(prompt: string): IntentResult {
   // patterns are linear (no nested quantifiers), so this is a bound on work, not a ReDoS fix.
   const text = (prompt ?? "").slice(0, 8192).trim().toLowerCase();
   if (text.length === 0) return CHAT;
-  // Gratitude / closing pleasantries are pure chat regardless of trailing words.
-  if (GRATITUDE_RE.test(text)) return CHAT;
+  // Gratitude / closing pleasantries are chat — UNLESS a real forward request follows ("thanks, now refactor the
+  // auth module"). WR-01: strip the gratitude prefix and reclassify; engage only on a STRONG (non-weak) work verb
+  // so an acknowledgement ("thanks for building that" — a WEAK build noun) stays chat while a genuine request fires.
+  if (GRATITUDE_RE.test(text)) {
+    const remainder = text.replace(GRATITUDE_RE, "").replace(/^[\s,.!:;-]+/, "").trim();
+    const reclassified = remainder.length ? classifyBody(remainder) : CHAT;
+    return reclassified.engage && !reclassified.weak ? reclassified : CHAT;
+  }
   // A leading greeting ("hi, please build X") must NOT swallow a real request: strip the
   // greeting + leading punctuation and re-classify the remainder. Empty remainder → CHAT;
   // otherwise the remainder's classification governs (CR greeting-swallow fix).

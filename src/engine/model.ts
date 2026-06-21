@@ -88,7 +88,9 @@ const VALID_OVERRIDE_TIERS = new Set<string>(["opus", "sonnet", "haiku", "inheri
 export function resolveModel(agentId: string, config: ModelConfig = {}): string | null {
   const override = config.model_profile_overrides?.[agentId];
   if (typeof override === "string" && VALID_OVERRIDE_TIERS.has(override)) {
-    return override;
+    // CR-03: "inherit" means LEAVE the parent model — return null so the caller doesn't set runParams.model to the
+    // literal string "inherit" (not a real model ref/alias). A real tier (opus/sonnet/haiku) is returned as-is.
+    return override === "inherit" ? null : override;
   }
 
   const requested = config.model_profile;
@@ -96,7 +98,7 @@ export function resolveModel(agentId: string, config: ModelConfig = {}): string 
     ? (requested as Profile)
     : "balanced";
 
-  if (profile === "inherit") return "inherit";
+  if (profile === "inherit") return null; // CR-03: inherit ⇒ leave the parent model (was returning "inherit")
 
   const entry = AGENT_CATALOG[agentId];
   if (!entry) return null;

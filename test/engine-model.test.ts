@@ -22,8 +22,8 @@ test("adaptive profile resolves via routingTier → adaptiveTierMap", () => {
   assert.equal(resolveModel("gsd-planner", { model_profile: "adaptive" }), "opus");
 });
 
-test("inherit profile returns 'inherit' (no concrete model)", () => {
-  assert.equal(resolveModel("gsd-planner", { model_profile: "inherit" }), "inherit");
+test("CR-03: inherit profile returns null (LEAVE the parent model, not the literal 'inherit')", () => {
+  assert.equal(resolveModel("gsd-planner", { model_profile: "inherit" }), null);
 });
 
 test("per-agent override wins over the profile lookup", () => {
@@ -62,10 +62,10 @@ test("M-03: an unknown override tier falls through to profile resolution", () =>
   assert.equal(resolveModel("gsd-planner", cfg), "sonnet");
 });
 
-test("M-03: a valid override tier still wins (incl. inherit)", () => {
+test("M-03/CR-03: a valid override tier wins; an 'inherit' override returns null (leave parent)", () => {
   assert.equal(
     resolveModel("gsd-planner", { model_profile: "balanced", model_profile_overrides: { "gsd-planner": "inherit" } }),
-    "inherit",
+    null,
   );
 });
 

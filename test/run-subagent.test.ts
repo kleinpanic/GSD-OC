@@ -150,3 +150,18 @@ test("model routing is LIVE: runSubagent sets runParams.model from resolveModel 
   await runSubagent(api as never, "gsd-planner", "msg", { model: "opus" });
   assert.equal(captured.model, "opus", "explicit model routed onto runParams");
 });
+
+test("CR-01: a sessionSuffix yields a DISTINCT session key (concurrent same-role dispatches don't collide)", async () => {
+  const a = mockApi();
+  await runSubagent(a.api, "gsd-executor", "plan A", { baseAgentId: "dev", sessionSuffix: "2-01" });
+  await runSubagent(a.api, "gsd-executor", "plan B", { baseAgentId: "dev", sessionSuffix: "2-02" });
+  const k1 = (a.calls.run[0] as { sessionKey: string }).sessionKey;
+  const k2 = (a.calls.run[1] as { sessionKey: string }).sessionKey;
+  assert.notEqual(k1, k2, "different suffixes → different session keys (no transcript bleed / delete race)");
+  assert.ok(k1.includes("2-01") && k2.includes("2-02"), "the unit id is encoded in the lane");
+  // without a suffix, same role+base collide (the bug this guards) — confirm the suffix is what separates them
+  const b = mockApi();
+  await runSubagent(b.api, "gsd-executor", "x", { baseAgentId: "dev" });
+  await runSubagent(b.api, "gsd-executor", "y", { baseAgentId: "dev" });
+  assert.equal((b.calls.run[0] as { sessionKey: string }).sessionKey, (b.calls.run[1] as { sessionKey: string }).sessionKey, "no suffix → same key (documents why the suffix is needed)");
+});

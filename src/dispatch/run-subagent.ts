@@ -114,15 +114,21 @@ export async function runSubagent(
   api: RunSubagentApi,
   agentId: string,
   message: string,
-  opts: { timeoutMs?: number; cleanup?: boolean; baseAgentId?: string; model?: string; planningDir?: string } = {},
+  opts: { timeoutMs?: number; cleanup?: boolean; baseAgentId?: string; model?: string; planningDir?: string; sessionSuffix?: string } = {},
 ): Promise<RunSubagentResult> {
   // GSD subagents (gsd-executor, gsd-planner…) are PERSONAS, not allowlisted OpenClaw agents — spawning a
   // session keyed directly on `gsd-*` fails the host's subagents.allowAgents check ("not in allowlist").
   // When a real base agent is given, run the persona as a SUB-LANE of it (agent:<base>:<gsd-role>) so the
   // session is owned by an allowed agent; the persona is still injected via extraSystemPrompt below.
+  //
+  // CR-01: CONCURRENT dispatches of the SAME role under the same base (the parallel execute wave's N
+  // gsd-executor units, the cross-AI panel's N gsd-code-reviewer calls) would otherwise collide on ONE
+  // session key → their transcripts bleed together AND the first finisher's cleanup deletes the live session
+  // out from under the others. A `sessionSuffix` (the caller's unique unit/reviewer id) keeps each lane distinct.
+  const laneRole = opts.sessionSuffix ? `${agentId}:${opts.sessionSuffix}` : agentId;
   const sessionKey = opts.baseAgentId
-    ? buildAgentMainSessionKey({ agentId: opts.baseAgentId, mainKey: agentId })
-    : buildAgentMainSessionKey({ agentId });
+    ? buildAgentMainSessionKey({ agentId: opts.baseAgentId, mainKey: laneRole })
+    : buildAgentMainSessionKey({ agentId: laneRole });
 
   // D-04: inject the ported agent's persona per-call via extraSystemPrompt
   // (types-Tcpca_5M.d.ts:6369). Unknown ids degrade to Phase-1 behavior (no persona),

@@ -494,7 +494,7 @@ const entry = definePluginEntry({
             if (rt) {
               const base = (typeof pluginConfig?.workerAgent === "string" && pluginConfig.workerAgent) || "dev";
               const dispatch = async (rv: { id: string; modelRef?: string }): Promise<ReviewFinding[]> => {
-                const res = await runSubagent(rt as never, "gsd-code-reviewer", `Cross-AI review (${rv.id}) of the current changes. Report findings with severity HIGH/MEDIUM/LOW. ${args?.intent ?? ""}`, { baseAgentId: base, model: rv.modelRef });
+                const res = await runSubagent(rt as never, "gsd-code-reviewer", `Cross-AI review (${rv.id}) of the current changes. Report findings with severity HIGH/MEDIUM/LOW. ${args?.intent ?? ""}`, { baseAgentId: base, model: rv.modelRef, sessionSuffix: rv.id });
                 const sev = /\bhigh\b/i.test(res.text || "") ? "high" : /\bmedium\b/i.test(res.text || "") ? "medium" : "low";
                 return res.status === "ok" ? [{ reviewer: rv.id, severity: sev as never, text: (res.text || "").slice(0, 400) }] : [];
               };

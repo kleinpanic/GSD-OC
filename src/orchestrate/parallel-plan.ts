@@ -145,7 +145,8 @@ export function makeUnitDispatcher(
       `GSD execute plan ${u.planId}${u.planPath ? ` (${u.planPath})` : ""} for intent: ${intent}.\n\n` +
       `ISOLATION: make ALL edits inside ${created.path} and commit them THERE (git add + git commit). ` +
       `Do not modify files outside it — they are merged back automatically.`;
-    const res = await runSubagent(api, "gsd-executor", msg, baseAgentId ? { baseAgentId } : {});
+    // CR-01: u.planId is unique per unit → distinct session lane so concurrent executors do not collide/bleed.
+    const res = await runSubagent(api, "gsd-executor", msg, { sessionSuffix: u.planId, ...(baseAgentId ? { baseAgentId } : {}) });
     if (res.status !== "ok") {
       removeWorktree(repoRoot, u.worktreeName); // abort isolation, preserve nothing-merged invariant
       return { unit: u, status: "failed", output: res.error ?? `[${res.status}]` };
