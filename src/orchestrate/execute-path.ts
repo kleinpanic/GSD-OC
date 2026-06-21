@@ -6,6 +6,7 @@
  */
 import type { PathStep } from "./select-path.js";
 import { runSubagent, type RunSubagentApi } from "../dispatch/run-subagent.js";
+import { createWorktree, mergeAndRemoveWorktree, removeWorktree } from "../engine/worktree.js";
 
 /**
  * Maps a path verb to the GSD subagent that executes it. Verbs without a subagent (interactive gates
@@ -40,7 +41,22 @@ export const SKILL_OR_GATE_VERBS = new Set(["discuss", "ship", "spike", "graphif
  * (their halting is governed by the static `step.gate` flag in executePath). The subagent's run status
  * becomes the step outcome (ok/failure).
  */
-export function makeSubagentDispatcher(api: RunSubagentApi, intent: string, baseAgentId?: string): StepDispatcher {
+/** Verbs whose subagent writes code — candidates for git-worktree isolation when driving in parallel. */
+export const WORKTREE_VERBS = new Set(["execute", "debug"]);
+
+export interface DispatcherOptions {
+  /** Isolate file-mutating steps in a git worktree (per-plan-worktree-gate) + merge back (post-merge-gate).
+   *  The SDK has no per-run cwd, so the executor is DIRECTED into the worktree and the engine enforces the
+   *  merge/cleanup — a conflict surfaces as a failed step, never silent loss. */
+  worktree?: { repoRoot: string };
+}
+
+export function makeSubagentDispatcher(
+  api: RunSubagentApi,
+  intent: string,
+  baseAgentId?: string,
+  opts: DispatcherOptions = {},
+): StepDispatcher {
   return async (step: PathStep): Promise<StepOutcome> => {
     const agentId = VERB_TO_SUBAGENT[step.verb];
     if (!agentId) {
@@ -49,11 +65,32 @@ export function makeSubagentDispatcher(api: RunSubagentApi, intent: string, base
       }
       return { ok: true, output: `${step.verb}: no subagent (skill/gate step)` };
     }
-    const msg = `GSD ${step.verb} step for intent: ${intent}. ${step.reason}`;
+    let msg = `GSD ${step.verb} step for intent: ${intent}. ${step.reason}`;
+
+    // per-plan-worktree-gate: isolate a code-writing step in its own worktree so parallel executors don't collide.
+    const wt = opts.worktree && WORKTREE_VERBS.has(step.verb) ? opts.worktree : null;
+    let wtName: string | null = null;
+    if (wt) {
+      wtName = step.verb; // unique within a path (one step per verb); verbs are safe worktree names
+      const created = createWorktree(wt.repoRoot, wtName);
+      if (!created.ok) return { ok: false, output: `per-plan-worktree-gate: create failed — ${created.error}` };
+      msg += `\n\nISOLATION: make ALL file edits inside the isolated worktree at ${created.path} and commit them there (git add + git commit). Do not modify files outside it — they will be merged back automatically.`;
+    }
+
     // baseAgentId hosts the GSD persona as a sub-lane (allowlist requirement — see runSubagent).
     const res = await runSubagent(api, agentId, msg, baseAgentId ? { baseAgentId } : {});
-    // Surface the run status (ok/error/timeout) so a mid-drive timeout is distinguishable from a failure.
-    return { ok: res.status === "ok", output: res.text || `[${res.status}]` };
+    const ok = res.status === "ok";
+
+    if (wt && wtName) {
+      if (ok) {
+        // post-merge-gate: merge the isolated branch back; a conflict fails the step (work is preserved on the branch).
+        const merged = mergeAndRemoveWorktree(wt.repoRoot, wtName);
+        if (!merged.ok) return { ok: false, output: `post-merge-gate: ${merged.error}` };
+      } else {
+        removeWorktree(wt.repoRoot, wtName); // abort isolation on a failed/timed-out run
+      }
+    }
+    return { ok, output: res.text || `[${res.status}]` };
   };
 }
 
