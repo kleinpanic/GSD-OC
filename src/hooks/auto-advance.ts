@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { route, type RouteResult } from "../engine/route.js";
 import { decideDispatch } from "../loop/decide.js";
 import { instructionFor } from "../orchestrate/inject.js";
+import { readGsdConfig } from "../engine/config.js";
 
 /**
  * `before_agent_finalize` auto-advance handler (ORCH-04; 4-RESEARCH.md:89-134, 510-531).
@@ -51,20 +52,23 @@ const MAX_REVISE_ATTEMPTS = 2;
 export function decideFinalize(
   event: BeforeAgentFinalizeEvent,
   next: RouteResult,
+  opts: { autoGates?: boolean } = {},
 ): BeforeAgentFinalizeResult {
   // Loop guard (Pitfall 1): never revise while a stop hook is already active.
   if (event.stopHookActive) return { action: "continue" };
 
   const decision = decideDispatch(next);
-  // Terminal (halt / complete-milestone) or a human gate (agent-driven) → do not advance.
-  if (decision.mode === "terminal" || decision.mode === "agent-driven") {
-    return { action: "continue" };
-  }
+  // Terminal (halt / complete-milestone) ALWAYS stops — never auto-advance past a halt or a completed milestone.
+  if (decision.mode === "terminal") return { action: "continue" };
+  // A human gate (discuss/verify) stops for approval — UNLESS this is a /goal-style autonomous run (mode:auto /
+  // workflow.auto_advance): then we drive THROUGH the gate too (the "keep going" re-prompt). stopHookActive +
+  // maxAttempts still bound the loop.
+  if (decision.mode === "agent-driven" && !opts.autoGates) return { action: "continue" };
 
-  // Code-driven mechanical step → revise (same-turn advance), bounded + deduped.
+  // Mechanical step (or an auto-passed gate) → revise (same-turn advance), bounded + deduped.
   return {
     action: "revise",
-    reason: "gsd-auto-advance",
+    reason: opts.autoGates && decision.mode === "agent-driven" ? "gsd-auto-advance (autonomous gate)" : "gsd-auto-advance",
     retry: {
       instruction: instructionFor(next),
       idempotencyKey: `gsd:${next.phase ?? "_"}:${next.action}`,
@@ -85,5 +89,8 @@ export function autoAdvanceHandler(
   if (!base) return { action: "continue" };
   const planningDir = join(base, ".planning");
   const next = route(planningDir);
-  return decideFinalize(event, next);
+  // /goal autonomy: drive through gates only when the project config opts in (mode:auto OR workflow.auto_advance).
+  const cfg = readGsdConfig(planningDir).config;
+  const autoGates = cfg.mode === "auto" || (cfg.workflow as { auto_advance?: boolean })?.auto_advance === true;
+  return decideFinalize(event, next, { autoGates });
 }

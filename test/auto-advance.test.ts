@@ -68,3 +68,15 @@ test("decideFinalize: maxAttempts is a bounded integer (2)", () => {
   assert.equal(Number.isInteger(r.retry!.maxAttempts), true);
   assert.ok(r.retry!.maxAttempts! <= 2);
 });
+
+test("decideFinalize: drives THROUGH a human gate only when autoGates (/goal mode)", () => {
+  const ev = { sessionId: "s", stopHookActive: false };
+  const gate = { route: "discuss", action: "discuss-phase", phase: "1", reason: "" } as never;
+  // default: a gate stops for approval
+  assert.equal(decideFinalize(ev as never, gate).action, "continue");
+  // autonomous: drive through it (revise)
+  assert.equal(decideFinalize(ev as never, gate, { autoGates: true }).action, "revise");
+  // terminal ALWAYS stops, even autonomous
+  const done = { route: "complete-milestone", action: "complete-milestone", phase: null, reason: "" } as never;
+  assert.equal(decideFinalize(ev as never, done, { autoGates: true }).action, "continue");
+});
