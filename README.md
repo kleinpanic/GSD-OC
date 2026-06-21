@@ -4,7 +4,7 @@
 Turns a coding/big-work prompt into a driven, *enforced* GSD lifecycle — research → map → plan →
 execute → code-review → verify → ship — for **any** OpenClaw agent, **without typing a single `/command`**.
 
-![tests](https://img.shields.io/badge/tests-342%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-399%20passing-brightgreen)
 ![node](https://img.shields.io/badge/node-%3E%3D22-blue)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![discord slots](https://img.shields.io/badge/discord%20slash%20slots-0-success)
@@ -60,17 +60,24 @@ Semantic retrieval needs a spark NIM embeddings endpoint via env (`SPARK_HOST` +
 `SPARK_BEARER_TOKEN`/`SPARK_API_KEY`, never inlined); without it, retrieval degrades to BM25 + trigram.
 See [docs/USAGE.md](docs/USAGE.md) for install, configuration, and a worked end-to-end example.
 
-## The 10 tools (0 Discord slash slots)
+## The 15 tools (0 Discord slash slots)
 
 | Tool | Purpose |
 |---|---|
-| `gsd_orchestrate` | Route a coding intent through the GSD lifecycle; `drive:true` dispatches the path's subagents. |
+| `gsd_orchestrate` | Route a coding intent through the GSD lifecycle; `drive:true` dispatches the path; **`autonomous:true`** drives the full multi-phase loop to milestone completion. |
 | `gsd_retrieve` | Hybrid retrieval of the relevant GSD skills/subagents for a free-text intent. |
-| `gsd_state` | Advance `.planning/STATE.md` (status / progress / decisions / blockers) atomically. |
+| `gsd_command` | Invoke **any** individual GSD command/skill by name (roadmapper, executor, planner, researchers, code-review, debug…) with **intent-inferred flags**. |
+| `gsd_state` | The **write engine**: `init` (scaffold a validated `.planning/`), status/progress/decisions/blockers, phase CRUD, plan-progress, complete-phase/requirement/milestone — atomic. |
+| `gsd_verify` | The **integrity engine**: validate-artifacts gate, phase-completeness, consistency, gap-checker, uat, audit-open, health. |
+| `gsd_workstream` | Parallel GSD tracks (`.planning/workstreams/<name>/`) — list/create/switch/complete + **dynamic intent-based adoption**. |
+| `gsd_session` | pause/resume (writes the checkpoint route() halts on) + thread + capture. |
+| `gsd_learnings` | Cross-project knowledge store (decisions/lessons/patterns). |
 | `gsd_settings` | Inspect / bootstrap the project's GSD config. |
 | `gsd_workflow` · `gsd_project` · `gsd_quality` · `gsd_context` · `gsd_manage` · `gsd_ideate` | 6 namespace routers — state-aware next-verb routing. |
 
-`registerCommand` is **0** (asserted by a slot-audit test) — the entire surface is tool-search-reachable.
+`registerCommand` is **0** (asserted by a slot-audit test) — the entire surface is tool-search-reachable. The
+orchestrator can now **write what it routes** (phase/roadmap/milestone/requirement CRUD) and **verify it** (the
+integrity engine), and drive the **autonomous multi-phase loop** with a no-progress guard.
 
 ## Operator configuration
 
@@ -88,6 +95,8 @@ Per-project opt-out: a `.gsd-off` file, `pluginConfig`, or `workflow.enforce_too
 ## Documentation
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — modules, the three pillars, lifecycle flow
+- [docs/CONFIG.md](docs/CONFIG.md) — the two config layers + full GSD config-key parity (workflow/git/review/research providers…)
+- [docs/FLAGS.md](docs/FLAGS.md) — flags as a layer of intent (`--all`/`--tdd`/`--wave N`/…)
 - [docs/RETRIEVAL.md](docs/RETRIEVAL.md) — the hybrid retrieval engine (corpus, modalities, RRF, incremental re-index)
 - [docs/ENFORCEMENT.md](docs/ENFORCEMENT.md) — the `before_tool_call` gate + spawn-persona model
 - [docs/SUBAGENTS.md](docs/SUBAGENTS.md) — the 33 ported GSD subagents + model routing
