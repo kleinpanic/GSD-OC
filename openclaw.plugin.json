@@ -58,6 +58,7 @@
       "gsd_state",
       "gsd_workstream",
       "gsd_verify",
+      "gsd_session",
       "gsd_command",
       "gsd_workflow",
       "gsd_project",

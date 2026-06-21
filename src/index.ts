@@ -17,6 +17,7 @@ import { enforceToolGate, enforceSpawnPersona, gsdProjectRoot } from "./hooks/en
 import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
 import { addPhase, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone } from "./engine/lifecycle.js";
 import { validateArtifacts, verifyPhaseCompleteness, validateConsistency, validateHealth } from "./engine/verify.js";
+import { pauseWork, resumeWork, writeThread, listThreads, closeThread, capture } from "./engine/session.js";
 import { suggestFlags } from "./orchestrate/flags.js";
 import { VERB_TO_SUBAGENT } from "./orchestrate/execute-path.js";
 import { resolveAgentOptional } from "./agents/index.js";
@@ -34,6 +35,21 @@ const STATE_TOOL = "gsd_state";
 const COMMAND_TOOL = "gsd_command";
 const WORKSTREAM_TOOL = "gsd_workstream";
 const VERIFY_TOOL = "gsd_verify";
+const SESSION_TOOL = "gsd_session";
+
+/** TypeBox schema for gsd_session — pause/resume + thread + capture lifecycle features. */
+const sessionParams = Type.Object(
+  {
+    op: Type.String({ description: "pause | resume | thread | threads | close-thread | capture" }),
+    reason: Type.Optional(Type.String({ description: "For pause: why." })),
+    next_step: Type.Optional(Type.String({ description: "For pause: the next step to resume from." })),
+    name: Type.Optional(Type.String({ description: "Thread name (for thread/close-thread)." })),
+    content: Type.Optional(Type.String({ description: "For thread: the note text." })),
+    text: Type.Optional(Type.String({ description: "For capture: the idea/task text." })),
+    type: Type.Optional(Type.String({ description: "For capture: idea|task|seed|note." })),
+  },
+  { additionalProperties: false },
+);
 
 /** TypeBox schema for gsd_verify — native integrity checks (validate-artifacts gate + verify/validate verbs). */
 const verifyParams = Type.Object(
@@ -518,6 +534,38 @@ const entry = definePluginEntry({
       },
     } as never);
 
+    // OCT-W3: gsd_session — pause/resume (writes the checkpoint route() halts on) + thread + capture. 0 slots.
+    api.registerTool({
+      name: SESSION_TOOL,
+      label: "GSD Session",
+      description: "Session lifecycle (op: pause | resume | thread | threads | close-thread | capture). pause writes the .continue-here.md checkpoint + paused_at so route() halts; resume clears it and returns the handoff.",
+      parameters: sessionParams,
+      async execute(_id: string, args: { op?: string; reason?: string; next_step?: string; name?: string; content?: string; text?: string; type?: string }, _sig?: unknown) {
+        const root = gsdProjectRoot(process.cwd());
+        const base = root ? root + "/.planning" : ".planning";
+        const dir = resolveWorkstreamDir(base);
+        try {
+          switch (args?.op) {
+            case "pause":
+              if (!args.reason) return { ok: false, error: "pause requires a reason" };
+              return { ok: true, ...pauseWork(dir, { reason: args.reason, nextStep: args.next_step }) };
+            case "resume": return { ok: true, handoff: resumeWork(dir) };
+            case "thread":
+              if (!args.name || !args.content) return { ok: false, error: "thread requires name + content" };
+              return { ok: true, file: writeThread(dir, args.name, args.content) };
+            case "threads": return { ok: true, threads: listThreads(dir) };
+            case "close-thread":
+              if (!args.name) return { ok: false, error: "close-thread requires name" };
+              return { ok: closeThread(dir, args.name) };
+            case "capture":
+              if (!args.text) return { ok: false, error: "capture requires text" };
+              return { ok: capture(dir, args.text, args.type) };
+            default: return { ok: false, error: "unknown op: " + args?.op };
+          }
+        } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+      },
+    } as never);
+
     // R0.4 Tier-1: register the 6 namespace router tools (zero Discord slash slots).
     // RTE-01: register the WIRED builder so each router returns the state-aware authoritative
     // next verb (native route('.planning')), not the static substring table (verifier finding).
@@ -624,6 +672,12 @@ Object.defineProperty(entry, toolPluginMetadataSymbol, {
         name: COMMAND_TOOL,
         label: "GSD Command",
         description: "Invoke any individual GSD command/skill by name with intent-inferred flags — 0 slots.",
+        parameters: { type: "object", additionalProperties: false, properties: {} },
+      },
+      {
+        name: SESSION_TOOL,
+        label: "GSD Session",
+        description: "Session lifecycle: pause/resume checkpoint + thread + capture — 0 slots.",
         parameters: { type: "object", additionalProperties: false, properties: {} },
       },
       {
