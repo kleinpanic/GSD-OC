@@ -21,6 +21,7 @@ import { scaffoldPlanning } from "./engine/scaffold.js";
 import { createAutoRepo, type RepoMode } from "./engine/repo.js";
 import path from "node:path";
 import { validateArtifacts, verifyPhaseCompleteness, validateConsistency, validateHealth, gapCheck } from "./engine/verify.js";
+import { scanUat, auditOpen } from "./engine/audit.js";
 import { pauseWork, resumeWork, writeThread, listThreads, closeThread, capture } from "./engine/session.js";
 import { addLearning, queryLearnings, pruneLearnings } from "./engine/learnings.js";
 import { scanInjection } from "./engine/security.js";
@@ -75,7 +76,7 @@ const sessionParams = Type.Object(
 /** TypeBox schema for gsd_verify — native integrity checks (validate-artifacts gate + verify/validate verbs). */
 const verifyParams = Type.Object(
   {
-    op: Type.String({ description: "validate-artifacts | phase-completeness | consistency | gap | health" }),
+    op: Type.String({ description: "validate-artifacts | phase-completeness | consistency | gap | uat | audit-open | health" }),
     phase: Type.Optional(Type.String({ description: "Phase number (for phase-completeness)." })),
   },
   { additionalProperties: false },
@@ -572,6 +573,8 @@ const entry = definePluginEntry({
               return verifyPhaseCompleteness(dir, args.phase);
             case "consistency": return validateConsistency(dir);
             case "gap": return gapCheck(dir);
+            case "uat": return { ok: true, phases: scanUat(dir) };
+            case "audit-open": return { ok: true, ...auditOpen(dir) };
             case "health": return validateHealth(dir);
             default: return { ok: false, error: `unknown op: ${args?.op}` };
           }
