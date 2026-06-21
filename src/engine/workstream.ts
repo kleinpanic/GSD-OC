@@ -79,7 +79,9 @@ export function listWorkstreams(planningDir: string): WorkstreamInfo[] {
 
 const SEED_STATE = (name: string): string =>
   `---\nstatus: planning\nworkstream: ${name}\n---\n\n# Project State — ${name}\n\n**Current Phase:** 1\n\n## Decisions\n\n## Blockers\n`;
-const SEED_ROADMAP = (name: string): string => `# Roadmap — ${name}\n`;
+// Flow-5 seam 2: seed a route()-parseable Phase 1 so a fresh track drives discuss→plan (not phase:null).
+const SEED_ROADMAP = (name: string): string =>
+  `# Roadmap — ${name}\n\n### Phase 1: Unnamed\n\n**Goal:** Define this workstreams first phase.\n**Requirements:** TBD\n**Plans:** 0 plans\n`;
 
 /** Create a workstream `<slug>/` with a seeded STATE.md + ROADMAP.md + phases/. Sets it active if it's the
  *  first. Idempotent: returns created:false if it already exists. */

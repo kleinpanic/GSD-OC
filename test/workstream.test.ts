@@ -68,3 +68,21 @@ test("suggestWorkstream: dynamic adoption by intent type + joins existing track"
     assert.equal(suggestWorkstream("work on payments integration", p), "payments");
   } finally { rmSync(join(p, ".."), { recursive: true, force: true }); }
 });
+
+test("Flow-5: a fresh workstream seeds a route()-drivable Phase 1", async () => {
+  const { createWorkstream, resolveWorkstreamDir } = await import("../src/engine/workstream.js");
+  const { route } = await import("../src/engine/route.js");
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const d = mkdtempSync(join(tmpdir(), "gsd-ws5-"));
+  const p = join(d, ".planning"); mkdirSync(p, { recursive: true });
+  writeFileSync(join(p, "STATE.md"), "---\nstatus: planning\n---\n");
+  try {
+    createWorkstream(p, "auth track");
+    const track = resolveWorkstreamDir(p);
+    assert.match(track, /workstreams[/\\]auth-track/, "resolves to the active track");
+    const r = route(track);
+    assert.equal(r.phase, "1", "fresh track routes to Phase 1, not phase:null");
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
