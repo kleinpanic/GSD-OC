@@ -49,12 +49,16 @@ const ACTION_TO_MANAGER_FLAG: Record<string, string> = {
 export function makeActionDispatcher(
   run: (agentId: string, message: string) => Promise<{ ok: boolean; output?: string }>,
   intent: string,
-  managerFlags: Record<string, string> = {},
+  managerFlags: Record<string, unknown> = {},
 ): AutoDispatch {
   return async (r) => {
     const agent = ACTION_TO_AGENT[r.action];
     if (!agent) return { ok: true, output: `${r.action}: no subagent` };
-    const flags = (managerFlags[ACTION_TO_MANAGER_FLAG[r.action] ?? ""] ?? "").trim();
+    // Guard: only look up a MAPPED action (no empty-"" key leak), and coerce — config is a user-editable
+    // boundary, so a non-string manager.flags value must not crash the loop with (n).trim().
+    const key = ACTION_TO_MANAGER_FLAG[r.action];
+    const raw = key ? managerFlags[key] : undefined;
+    const flags = (typeof raw === "string" ? raw : "").trim();
     return run(
       agent,
       `GSD ${r.action} for phase ${r.phase ?? "?"}${flags ? ` (flags: ${flags})` : ""}. Project intent: ${intent}. Persist the phase artifacts under .planning/.`,

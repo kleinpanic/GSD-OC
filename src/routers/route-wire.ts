@@ -2,6 +2,7 @@ import { Type } from "typebox";
 import { route, type RouteResult } from "../engine/route.js";
 import { ROUTERS, type RouterDef } from "./routers.js";
 import { resolveWorkstreamDir } from "../engine/workstream.js";
+import { gsdProjectRoot } from "../hooks/enforce-gate.js";
 
 /**
  * RTE-01 / D-01: wire each namespace router's `execute` to the native `route(".planning")`
@@ -42,10 +43,16 @@ export function wireRouterExecute(
   def: RouterDef,
   planningDir = ".planning",
 ): (params?: { intent?: string }) => Promise<WiredRouteHit> {
-  return async (_params?: { intent?: string }): Promise<WiredRouteHit> =>
-    // Flow-5: resolve the ACTIVE workstream track at execute-time (lazily) so the routers route over the same
-    // .planning that gsd_state mutates — not the root track. For an explicit non-default dir, honor it as-is.
-    mapRouteResult(def.namespace, route(planningDir === ".planning" ? resolveWorkstreamDir(".planning") : planningDir));
+  return async (_params?: { intent?: string }): Promise<WiredRouteHit> => {
+    // Flow-5: route over the same track gsd_state mutates. For the default, walk UP from cwd to the GSD project
+    // root (matching gsd_state + enforce-gate, which use gsdProjectRoot) before resolving the active workstream —
+    // so all three agree on WHICH project even when cwd is the gateway home, not the project dir. Explicit dir honored.
+    const base =
+      planningDir === ".planning"
+        ? resolveWorkstreamDir(`${gsdProjectRoot(process.cwd()) ?? process.cwd()}/.planning`)
+        : planningDir;
+    return mapRouteResult(def.namespace, route(base));
+  };
 }
 
 /**

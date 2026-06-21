@@ -81,3 +81,15 @@ test("makeActionDispatcher applies manager.flags per action (/gsd-manager parity
   // an action with no manager flag → no flags clause
   await dispatch({ action: "verify-work", phase: "1", reason: "" } as never);
 });
+
+test("makeActionDispatcher: a non-string manager.flags value does NOT crash (config is a boundary)", async () => {
+  const { makeActionDispatcher } = await import("../src/orchestrate/autonomous.js");
+  const run = async () => ({ ok: true });
+  // malformed config: execute flag is a number — must not throw (5).trim()
+  const dispatch = makeActionDispatcher(run, "x", { execute: 5, "": "--leak" } as never);
+  const r1 = await dispatch({ action: "execute-phase", phase: "1", reason: "" } as never);
+  assert.ok(r1.ok, "non-string flag coerced, no crash");
+  // empty-key leak guard: an unmapped action must NOT pick up managerFlags[""]
+  const r2 = await dispatch({ action: "verify-work", phase: "1", reason: "" } as never);
+  assert.ok(r2.ok);
+});

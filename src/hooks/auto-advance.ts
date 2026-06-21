@@ -4,6 +4,7 @@ import { decideDispatch } from "../loop/decide.js";
 import { instructionFor } from "../orchestrate/inject.js";
 import { readGsdConfig } from "../engine/config.js";
 import { resolveProfiledConfig } from "../engine/profile.js";
+import { resolveWorkstreamDir } from "../engine/workstream.js";
 
 /**
  * `before_agent_finalize` auto-advance handler (ORCH-04; 4-RESEARCH.md:89-134, 510-531).
@@ -92,7 +93,8 @@ export function autoAdvanceHandler(
 ): BeforeAgentFinalizeResult {
   const base = ctx?.cwd ?? event.cwd;
   if (!base) return { action: "continue" };
-  const planningDir = join(base, ".planning");
+  // Flow-5: route over the SAME active workstream track gsd_state + enforce-gate + routers use (was root .planning).
+  const planningDir = resolveWorkstreamDir(join(base, ".planning"));
   const next = route(planningDir);
   // /goal autonomy: drive through gates only when the project config opts in (mode:auto OR workflow.auto_advance).
   // Flow-6 fix: read the FULL profiled config so a .gsd-profile / surface that sets mode:auto reaches the driver.
