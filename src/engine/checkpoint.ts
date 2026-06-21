@@ -74,6 +74,7 @@ export function parseCheckpointReply(gate: Pick<GateRequest, "options">, reply: 
   }
   const exact = gate.options.find((o) => o.id === r || o.label.toLowerCase() === r);
   if (exact) return exact.id;
-  const partial = gate.options.find((o) => o.label.toLowerCase().includes(r) || r.includes(o.id));
+  // LOW-02: partial-match on LABEL only — matching a 2-char id as a substring of the reply mis-routes ("no" in "another").
+  const partial = gate.options.find((o) => o.label.toLowerCase().includes(r));
   return partial?.id ?? null;
 }

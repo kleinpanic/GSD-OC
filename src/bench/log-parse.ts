@@ -55,7 +55,8 @@ export function listGsdSessions(dbPath = defaultDbPath()): { sessionId: string; 
       "SELECT session_id AS sessionId, COUNT(*) AS calls FROM message_parts WHERE tool_name LIKE 'gsd%' GROUP BY session_id ORDER BY calls DESC",
     ) as { sessionId: string; calls: number }[];
     return rows;
-  } catch {
+  } catch (e) {
+    console.warn("[bench] listGsdSessions query failed (schema drift?):", e instanceof Error ? e.message : e);
     return [];
   } finally {
     db.close();
@@ -105,7 +106,8 @@ export function buildTrace(
       wallClockMs: 0,
       reachedDone: label.reachedDone ?? false,
     };
-  } catch {
+  } catch (e) {
+    console.warn("[bench] buildTrace query failed (schema drift?):", e instanceof Error ? e.message : e);
     return null;
   } finally {
     db.close();

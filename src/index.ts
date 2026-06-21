@@ -460,7 +460,7 @@ const entry = definePluginEntry({
                 return res.status === "ok" ? [{ reviewer: rv.id, severity: sev as never, text: (res.text || "").slice(0, 400) }] : [];
               };
               const verdict = await crossAiReview(reviewers, command, dispatch);
-              crossAi = { reviewers: reviewers.map((r) => r.id), findings: verdict.findings, high: verdict.highCount };
+              crossAi = { reviewers: reviewers.map((r) => r.id), findings: verdict.findings, high: verdict.highCount, ...(verdict.errored.length ? { errored: verdict.errored } : {}) };
             } else {
               crossAi = { reviewers: reviewers.map((r) => r.id), note: "runtime unreachable — dispatch each reviewer via your own sessions_spawn with its model" };
             }

@@ -5,6 +5,8 @@
  * so a stray manual commit isn't silently undone. Argv arrays, `--` guard, dryRun seam.
  */
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 export interface UndoResult {
   argv: string[][];
@@ -35,8 +37,11 @@ export function undoLast(repoRoot: string, opts: { force?: boolean; dryRun?: boo
   if (opts.dryRun) return { argv, ok: true, reverted: { sha, subject: subject ?? "" } };
   const r = spawnSync("git", a, { cwd: repoRoot, encoding: "utf8" });
   if (r.status !== 0) {
-    spawnSync("git", ["revert", "--abort"], { cwd: repoRoot }); // leave the tree clean on conflict
-    return { argv, ok: false, error: `revert failed (conflict): ${(r.stderr || r.stdout || "").trim()}` };
+    // MED-01: only abort when a revert is actually IN PROGRESS (a conflict left REVERT_HEAD); a non-conflict
+    // failure (GPG/detached-HEAD) has nothing to abort, and we must not mislabel it as a conflict.
+    const inProgress = existsSync(join(repoRoot, ".git", "REVERT_HEAD"));
+    if (inProgress) spawnSync("git", ["revert", "--abort"], { cwd: repoRoot });
+    return { argv, ok: false, error: `revert ${inProgress ? "conflicted (tree aborted clean)" : "failed"}: ${(r.stderr || r.stdout || "").trim()}` };
   }
   return { argv, ok: true, reverted: { sha, subject: subject ?? "" } };
 }

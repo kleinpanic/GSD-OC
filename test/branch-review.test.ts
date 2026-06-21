@@ -15,7 +15,7 @@ test("branch: createWorkBranch dryRun emits safe argv; none → no-op", () => {
   assert.deepEqual(createWorkBranch("/r", { branching_strategy: "none" }, "phase", {}), { argv: [], ok: true, branch: null });
   const r = createWorkBranch("/r", { branching_strategy: "phase" }, "phase", { phase: "2", slug: "x" }, { dryRun: true });
   assert.equal(r.branch, "gsd/phase-2-x");
-  assert.deepEqual(r.argv[0], ["switch", "-c", "gsd/phase-2-x", "HEAD"]);
+  assert.deepEqual(r.argv[0], ["switch", "-c", "gsd/phase-2-x", "--", "HEAD"]);
 });
 
 test("cross-ai: reviewer resolution (model-ref vs ACP agentId)", () => {

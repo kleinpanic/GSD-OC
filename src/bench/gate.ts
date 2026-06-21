@@ -60,7 +60,7 @@ export function compareToBaseline(snap: Snapshot, baseline: Baseline): { pass: b
     let bad = false;
     if (spec.bar === "≥" && spec.min != null) bad = current < spec.min - tol;
     else if (spec.bar === "≤" && spec.max != null) bad = current > spec.max + tol;
-    else if (spec.bar === "==" && spec.eq != null) bad = current !== spec.eq;
+    else if (spec.bar === "==" && spec.eq != null) bad = Math.abs(current - spec.eq) > tol; // tol-aware (floats)
     if (bad) regressions.push({ metric, baseline: spec.value, current, bar: spec.bar });
   }
   return { pass: regressions.length === 0, regressions };

@@ -70,6 +70,7 @@ export function createWorkBranch(
   // if the branch exists, switch; else create from base (or HEAD). `--` guards the ref.
   const exists = !opts.dryRun && spawnSync("git", ["rev-parse", "--verify", "--quiet", branch], { cwd: repoRoot }).status === 0;
   const base = cfg.base_branch || "HEAD";
-  const res = exists ? run(["switch", "--", branch]) : run(["switch", "-c", branch, base]);
+  // LOW-01: guard base against a "-flag" value; "--" ends option parsing for the create-from-base form.
+  const res = exists ? run(["switch", "--", branch]) : run(["switch", "-c", branch, "--", base]);
   return { argv, ok: res.ok, branch, error: res.err };
 }

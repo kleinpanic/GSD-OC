@@ -78,8 +78,15 @@ export async function runExecuteWave(
   };
 
   for (const u of ready) {
-    // dependency barrier: wait until all deps have MERGED before launching this unit
-    while (!u.dependsOn.every((d) => merged.has(d)) && inflight.size > 0) await Promise.race(inflight);
+    // dependency barrier: wait until every dep has RESOLVED (merged, failed, or conflicted) before deciding.
+    while (inflight.size > 0 && !u.dependsOn.every((d) => results.has(d))) await Promise.race(inflight);
+    // CR-01: a dep that did NOT merge (conflict/failed) breaks this unit's contract — it must NOT run against a
+    // base tree missing its dependency's work. Skip + record a failure (so allMerged/failedUnits stay honest).
+    const unmet = u.dependsOn.find((d) => !merged.has(d));
+    if (unmet) {
+      results.set(u.planId, { unit: u, status: "failed", output: `dependency ${unmet} did not merge` });
+      continue;
+    }
     while (inflight.size >= cap) await Promise.race(inflight); // concurrency cap
     launch(u);
   }

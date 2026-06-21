@@ -63,7 +63,7 @@ export async function runAutonomous(
   const maxSteps = Math.max(1, Math.min(opts.maxSteps ?? 60, 500));
   const autoGates = opts.autoGates !== false;
   const steps: AutoStep[] = [];
-  let prevKey = "";
+  const visits = new Map<string, number>(); // LOW-04: per-(action,phase) visit count catches N-cycles (A→B→A), not just A→A
 
   for (let i = 0; i < maxSteps; i++) {
     const r = route(planningDir);
@@ -78,10 +78,12 @@ export async function runAutonomous(
       return { completed: false, reason: "gate", steps, haltedAt: r.action };
     }
 
-    // NO-PROGRESS guard: the same action+phase as the previous (successful) step means the dispatch did not
-    // advance state — driving it again would loop forever. Bail with the honest reason.
-    if (key === prevKey) {
-      steps.push({ action: r.action, phase: r.phase ?? null, status: "failed", output: "dispatch did not advance state" });
+    // NO-PROGRESS guard: if the SAME (action,phase) recurs a 3rd time, state isn't advancing — whether it's
+    // A→A→A or an A→B→A oscillation — so driving on would loop. Bail with the honest reason (still maxSteps-bounded).
+    const seen = (visits.get(key) ?? 0) + 1;
+    visits.set(key, seen);
+    if (seen >= 3) {
+      steps.push({ action: r.action, phase: r.phase ?? null, status: "failed", output: "no progress (action recurred without advancing state)" });
       return { completed: false, reason: "no-progress", steps, haltedAt: r.action };
     }
 
@@ -94,7 +96,6 @@ export async function runAutonomous(
     }
     steps.push({ action: r.action, phase: r.phase ?? null, status: outcome.ok ? "done" : "failed", output: outcome.output });
     if (!outcome.ok) return { completed: false, reason: "failure", steps, haltedAt: r.action };
-    prevKey = key;
   }
   return { completed: false, reason: "max-steps", steps };
 }
