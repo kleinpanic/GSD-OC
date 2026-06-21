@@ -3,19 +3,46 @@
  * touches the filesystem or shells out: path-containment (no traversal outside a root), shell-arg safety (no
  * injection sink), and a light prompt-injection scanner for untrusted text the plugin might surface to an agent.
  */
+import fs from "node:fs";
 import path from "node:path";
 
-/** True iff `target` resolves to `root` or a descendant of it (no `../` escape, symlink-naive — caller lstat's). */
+/** Lexical containment: `target` resolves to `root` or a descendant (no `../` escape). */
 export function isWithinRoot(root: string, target: string): boolean {
   const r = path.resolve(root);
   const t = path.resolve(root, target);
   return t === r || t.startsWith(r + path.sep);
 }
 
-/** Throw if `target` escapes `root`. Use before any write derived from untrusted input. */
+/** Real path of the nearest EXISTING ancestor of `p` (resolves symlinks). For a not-yet-created path, the parent
+ *  that exists is what a write would actually land under — so checking its realpath catches a symlinked dir. */
+function realExistingAncestor(p: string): string {
+  let dir = path.resolve(p);
+  for (let i = 0; i < 64; i++) {
+    try {
+      return fs.realpathSync(dir);
+    } catch {
+      const parent = path.dirname(dir);
+      if (parent === dir) return dir;
+      dir = parent;
+    }
+  }
+  return dir;
+}
+
+/**
+ * Throw if `target` escapes `root` — lexically AND after resolving symlinks (HIGH-03). The lexical check covers
+ * not-yet-created paths; the realpath check on the nearest existing ancestor catches a symlinked dir inside root
+ * that points outside it (which the lexical check alone would miss).
+ */
 export function assertWithinRoot(root: string, target: string): string {
+  const resolved = path.resolve(root, target);
   if (!isWithinRoot(root, target)) throw new Error(`path escapes root: ${JSON.stringify(target)}`);
-  return path.resolve(root, target);
+  const realRoot = realExistingAncestor(root);
+  const realTarget = realExistingAncestor(resolved);
+  if (realTarget !== realRoot && !realTarget.startsWith(realRoot + path.sep)) {
+    throw new Error(`path escapes root via symlink: ${JSON.stringify(target)}`);
+  }
+  return resolved;
 }
 
 /** A shell-unsafe arg = empty, a leading-dash (flag injection), or a shell metachar. We never build shell
