@@ -97,9 +97,9 @@ Per-project opt-out: a `.gsd-off` file, `pluginConfig`, or `workflow.enforce_too
 ## Project status
 
 Milestone **M1 (Retrieval Core)** complete, with the finite-path orchestrator + enforcement layer built.
-Hardened through **9 rounds of adversarial multi-agent code review** to convergence — see
-[docs/REVIEW-LOG.md](docs/REVIEW-LOG.md). The plugin dogfoods GSD on itself: its own
-`.planning/` directory is the GSD working history.
+Hardened through **9 rounds of adversarial multi-agent code review** to convergence — the full
+round-by-round log (CRITICAL → HIGH → converged, ~37 bugs fixed) is in
+[docs/REVIEW-LOG.md](docs/REVIEW-LOG.md). The plugin was itself built with the GSD methodology it ports.
 
 ## Constraints (by design)
 
