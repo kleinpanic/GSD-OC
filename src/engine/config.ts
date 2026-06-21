@@ -189,3 +189,89 @@ export function bootstrapGsdConfig(planningDir = ".planning"): boolean {
   fs.writeFileSync(p, JSON.stringify(defaultGsdConfig(), null, 2) + "\n");
   return true;
 }
+
+export interface SetConfigResult {
+  ok: boolean;
+  key: string;
+  value?: unknown;
+  error?: string;
+}
+
+/** Walk a dotted key path against the default schema. Returns the default value at that path, or {found:false}. */
+function defaultAt(segs: string[]): { found: boolean; value: unknown } {
+  let cur: unknown = defaultGsdConfig();
+  for (const seg of segs) {
+    if (!isObject(cur) || !(seg in cur)) return { found: false, value: undefined };
+    cur = (cur as Record<string, unknown>)[seg];
+  }
+  return { found: true, value: cur };
+}
+
+/** Coerce a caller-supplied value to the type of the schema default at this key. Throws on an invalid coercion. */
+function coerceToDefault(def: unknown, raw: unknown): unknown {
+  if (typeof def === "boolean") {
+    if (typeof raw === "boolean") return raw;
+    const s = String(raw).trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(s)) return true;
+    if (["false", "0", "no", "off"].includes(s)) return false;
+    throw new Error(`expected a boolean, got ${JSON.stringify(raw)}`);
+  }
+  if (typeof def === "number") {
+    const n = typeof raw === "number" ? raw : Number(String(raw).trim());
+    if (!Number.isFinite(n)) throw new Error(`expected a number, got ${JSON.stringify(raw)}`);
+    return n;
+  }
+  if (Array.isArray(def)) {
+    if (Array.isArray(raw)) return raw;
+    const s = String(raw).trim();
+    return s === "" ? [] : s.split(",").map((x) => x.trim()).filter(Boolean);
+  }
+  // string OR null-typed default (project_code, base_branch, …) → string, or explicit null
+  if (raw === null) return null;
+  const s = String(raw);
+  return def === null && (s === "null" || s === "") ? null : s;
+}
+
+/**
+ * CFG-03: set a single config key (dotted path, e.g. "workflow.tdd_mode") in the SPARSE `.planning/config.json`
+ * overrides — the /gsd-settings + /gsd-config write surface, reimplemented natively. The key MUST exist in the
+ * default schema (typo/pollution guard) and MUST be a leaf scalar/array (no wholesale object replacement). The
+ * value is type-coerced to the schema default's type. Only the changed key is persisted (sparse overrides are
+ * preserved so a profile/surface still layers correctly). Never overwrites the whole file.
+ */
+export function setGsdConfigKey(planningDir: string, key: string, value: unknown): SetConfigResult {
+  const segs = key.split(".").map((s) => s.trim()).filter(Boolean);
+  if (segs.length === 0) return { ok: false, key, error: "key is required" };
+  if (segs.some((s) => DANGEROUS_KEYS.has(s))) return { ok: false, key, error: "key contains a reserved segment" };
+  const at = defaultAt(segs);
+  if (!at.found) return { ok: false, key, error: `unknown config key (not in the GSD schema)` };
+  if (isObject(at.value)) return { ok: false, key, error: `'${key}' is a section, not a leaf — set a nested key like '${key}.<field>'` };
+
+  let coerced: unknown;
+  try {
+    coerced = coerceToDefault(at.value, value);
+  } catch (e) {
+    return { ok: false, key, error: e instanceof Error ? e.message : String(e) };
+  }
+
+  // Load the existing SPARSE overrides (not the defaulted config) and deep-set the one key.
+  const p = path.join(planningDir, "config.json");
+  let overrides: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(p, "utf8"));
+    if (isObject(parsed)) overrides = parsed;
+  } catch {
+    /* absent/corrupt → start from empty sparse overrides */
+  }
+  let cur = overrides;
+  for (const seg of segs.slice(0, -1)) {
+    const next = cur[seg];
+    if (!isObject(next)) cur[seg] = {};
+    cur = cur[seg] as Record<string, unknown>;
+  }
+  cur[segs[segs.length - 1]] = coerced;
+
+  fs.mkdirSync(planningDir, { recursive: true });
+  fs.writeFileSync(p, JSON.stringify(overrides, null, 2) + "\n");
+  return { ok: true, key, value: coerced };
+}

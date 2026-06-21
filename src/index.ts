@@ -13,7 +13,7 @@ import { gsdBootstrapHandler, type AgentBootstrapEvent } from "./engage/bootstra
 import { retrieve } from "./retrieval/retrieve.js";
 import { embedAvailable } from "./retrieval/embed.js";
 import { selectPath } from "./orchestrate/select-path.js";
-import { readGsdConfig, bootstrapGsdConfig } from "./engine/config.js";
+import { readGsdConfig, bootstrapGsdConfig, setGsdConfigKey } from "./engine/config.js";
 import { resolveProfiledConfig, applySurfaceProfile, isSurfaceProfile } from "./engine/profile.js";
 import { route as routeEngine } from "./engine/route.js";
 import { enforceToolGate, enforceSpawnPersona, gsdProjectRoot } from "./hooks/enforce-gate.js";
@@ -174,6 +174,9 @@ const retrieveParams = Type.Object(
 /** TypeBox schema for the gsd_settings tool. */
 const settingsParams = Type.Object(
   {
+    op: Type.Optional(Type.String({ description: "get (default — inspect config) | set (write one key)." })),
+    key: Type.Optional(Type.String({ description: "For op:set — dotted config key, e.g. 'workflow.tdd_mode', 'git.auto_repo'." })),
+    value: Type.Optional(Type.Unknown({ description: "For op:set — the value (type-coerced to the schema default's type)." })),
     profile: Type.Optional(Type.String({ description: "Apply a surface profile for this read: minimal | standard | full." })),
     bootstrap: Type.Optional(
       Type.Boolean({ description: "Write a default GSD config if none exists (never overwrites)." }),
@@ -439,10 +442,15 @@ const entry = definePluginEntry({
       name: SETTINGS_TOOL,
       label: "GSD Settings",
       description:
-        "Inspect the project's GSD configuration (workflow toggles, model profile, security/review gates) from .planning/config.json, with GSD defaults applied. Pass {bootstrap:true} to write a default config if none exists.",
+        "Inspect or change the project's GSD configuration (workflow toggles, model profile, security/review gates) in .planning/config.json. Default op:get returns the config with GSD defaults applied. op:set writes one key: {op:'set', key:'workflow.tdd_mode', value:true} — key must exist in the GSD schema, value is type-coerced. {bootstrap:true} writes a default config if none exists.",
       parameters: settingsParams,
-      async execute(_toolCallId: string, args: { bootstrap?: boolean; profile?: string }, _signal?: unknown) {
+      async execute(_toolCallId: string, args: { op?: string; key?: string; value?: unknown; bootstrap?: boolean; profile?: string }, _signal?: unknown) {
         const repoRoot = gsdProjectRoot(process.cwd()) ?? process.cwd();
+        // op:set — write a single validated, type-coerced key into the sparse .planning/config.json overrides.
+        if (args?.op === "set") {
+          if (!args.key) return { ok: false, error: "key is required for op:set" };
+          return setGsdConfigKey(`${repoRoot}/.planning`, args.key, args.value);
+        }
         let created = false;
         if (args?.bootstrap) created = bootstrapGsdConfig(".planning");
         const { overrides: projectOverrides, source } = readGsdConfig(".planning");
