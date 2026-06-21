@@ -37,3 +37,19 @@ test("every tool schema accepts a call with all args its execute reads (host-val
     }
   }
 });
+
+test("op fields are literal unions — the host REJECTS an unknown op at the boundary (WR-02)", async () => {
+  const { Value } = await import("typebox/value");
+  const mod = await import("../src/index.js");
+  const tools: { name: string; parameters: unknown }[] = [];
+  (mod.default as { register: (api: unknown) => void }).register({
+    registerService() {}, registerTool(t: never) { tools.push(t); }, registerCommand() {}, registerHook() {}, registerInternalHook() {},
+    session: { state: { registerSessionExtension() {} } }, pluginConfig: {},
+  });
+  const opTools = { gsd_state: "commit", gsd_session: "checkpoint", gsd_verify: "gap", gsd_workstream: "create", gsd_learnings: "add" };
+  for (const [name, goodOp] of Object.entries(opTools)) {
+    const t = tools.find((x) => x.name === name)!;
+    assert.ok(Value.Check(t.parameters as never, { op: goodOp }), `${name} accepts a real op`);
+    assert.ok(!Value.Check(t.parameters as never, { op: "frobnicate_xyz" }), `${name} REJECTS an unknown op`);
+  }
+});

@@ -59,7 +59,7 @@ const LEARNINGS_TOOL = "gsd_learnings";
 /** TypeBox schema for gsd_learnings — cross-project knowledge store (add/query/prune). */
 const learningsParams = Type.Object(
   {
-    op: Type.String({ description: "add | query | prune" }),
+    op: Type.Union([Type.Literal("add"), Type.Literal("query"), Type.Literal("prune")], { description: "add | query | prune" }),
     kind: Type.Optional(Type.String({ description: "decision | lesson | pattern (for add/query)." })),
     text: Type.Optional(Type.String({ description: "For add: the learning; for query: the search text." })),
     tags: Type.Optional(Type.Array(Type.String())),
@@ -72,7 +72,7 @@ const learningsParams = Type.Object(
 /** TypeBox schema for gsd_session — pause/resume + thread + capture + checkpoint gate lifecycle features. */
 const sessionParams = Type.Object(
   {
-    op: Type.String({ description: "pause | resume | thread | threads | close-thread | capture | checkpoint | checkpoint-reply" }),
+    op: Type.Union([Type.Literal("pause"), Type.Literal("resume"), Type.Literal("thread"), Type.Literal("threads"), Type.Literal("close-thread"), Type.Literal("capture"), Type.Literal("checkpoint"), Type.Literal("checkpoint-reply")], { description: "pause | resume | thread | threads | close-thread | capture | checkpoint | checkpoint-reply" }),
     reason: Type.Optional(Type.String({ description: "For pause: why." })),
     next_step: Type.Optional(Type.String({ description: "For pause: the next step to resume from." })),
     name: Type.Optional(Type.String({ description: "Thread name (for thread/close-thread)." })),
@@ -87,7 +87,7 @@ const sessionParams = Type.Object(
 /** TypeBox schema for gsd_verify — native integrity checks (validate-artifacts gate + verify/validate verbs). */
 const verifyParams = Type.Object(
   {
-    op: Type.String({ description: "validate-artifacts | phase-completeness | consistency | gap | uat | audit-open | health" }),
+    op: Type.Union([Type.Literal("validate-artifacts"), Type.Literal("phase-completeness"), Type.Literal("consistency"), Type.Literal("gap"), Type.Literal("uat"), Type.Literal("audit-open"), Type.Literal("health")], { description: "validate-artifacts | phase-completeness | consistency | gap | uat | audit-open | health" }),
     phase: Type.Optional(Type.String({ description: "Phase number (for phase-completeness)." })),
   },
   { additionalProperties: false },
@@ -96,7 +96,7 @@ const verifyParams = Type.Object(
 /** TypeBox schema for gsd_workstream — manage parallel GSD tracks (list/create/switch/complete/suggest). */
 const workstreamParams = Type.Object(
   {
-    op: Type.String({ description: "list | create | switch | complete | suggest | active" }),
+    op: Type.Union([Type.Literal("list"), Type.Literal("create"), Type.Literal("switch"), Type.Literal("complete"), Type.Literal("suggest"), Type.Literal("active")], { description: "list | create | switch | complete | suggest | active" }),
     name: Type.Optional(Type.String({ description: "Workstream name (for create/switch/complete)." })),
     intent: Type.Optional(Type.String({ description: "For 'suggest': the coding intent → the track it belongs to." })),
   },
@@ -116,7 +116,7 @@ const commandParams = Type.Object(
 /** TypeBox schema for the gsd_state mutation tool (ENG-WRITE-01). */
 const stateParams = Type.Object(
   {
-    op: Type.String({ description: "init | branch | commit | progress | undo | set-status | record-progress | add-decision | add-blocker | add-phase | scaffold-phase | update-plan-progress | complete-phase | complete-requirement | complete-milestone" }),
+    op: Type.Union([Type.Literal("init"), Type.Literal("branch"), Type.Literal("commit"), Type.Literal("progress"), Type.Literal("undo"), Type.Literal("set-status"), Type.Literal("record-progress"), Type.Literal("add-decision"), Type.Literal("add-blocker"), Type.Literal("add-phase"), Type.Literal("scaffold-phase"), Type.Literal("update-plan-progress"), Type.Literal("complete-phase"), Type.Literal("complete-requirement"), Type.Literal("complete-milestone")], { description: "init | branch | commit | progress | undo | set-status | record-progress | add-decision | add-blocker | add-phase | scaffold-phase | update-plan-progress | complete-phase | complete-requirement | complete-milestone" }),
     status: Type.Optional(Type.String({ description: "For set-status (e.g. planning|executing|complete|error)." })),
     decision: Type.Optional(Type.String({ description: "For add-decision: the decision text." })),
     blocker: Type.Optional(Type.String({ description: "For add-blocker: the blocker text." })),
