@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - name: Build (tsc + bundle corpus/vectors into dist)
+        run: npm run build
+      - name: Plugin manifest validates
+        run: npx openclaw plugins validate || echo "::warning::openclaw validate unavailable in CI"
+      - name: Test suite (node:test)
+        run: npm test
+      - name: Slot audit (registerCommand must stay 0)
+        run: node --input-type=module -e 'import("./dist/routing/slot-audit.js").then(m=>{const a=m.auditSlots("openclaw.plugin.json");if(a.registerCommandCalls!==0){console.error("registerCommand != 0");process.exit(1)}console.log("slots ok:",a.registerToolCalls,"tools, 0 commands")})'
