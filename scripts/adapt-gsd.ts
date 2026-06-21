@@ -44,5 +44,8 @@ export function adaptGsdText(text: string): string {
 /** True iff the text still carries a Claude-runtime assumption the transform should have removed.
  *  Includes a BARE `.claude/` (not just $HOME/~) so PORT-02 catches `.claude/skills/` etc. */
 export function hasClaudeRuntimeRef(text: string): boolean {
-  return /(?<!\w)\.claude\/|\$HOME\/\.claude|~\/\.claude|gsd-tools|Claude Code|claude-code/.test(text);
+  // WARNING fix: `.claude` followed by ANY non-word char (path sep `/`, `\`, `;`, backtick, space, EOL) — the old
+  // `\.claude\/` only caught a forward slash and missed `.claude\tasks`, `.claude;`, etc. The `(?<!\w)` lookbehind
+  // still excludes the legitimate `review.models.claude` reviewer-config key (a word char precedes that dot).
+  return /(?<!\w)\.claude(?!\w)|\$HOME\/\.claude|~\/\.claude|gsd-tools|Claude Code|claude-code/.test(text);
 }

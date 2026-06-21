@@ -6,6 +6,15 @@
     "declaration": false,
     "noEmit": false
   },
-  "include": ["src", "test"],
-  "exclude": ["node_modules", "dist", "dist-test", ".planning", "research"]
+  "include": [
+    "src",
+    "test"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist-test",
+    ".planning",
+    "research"
+  ]
 }

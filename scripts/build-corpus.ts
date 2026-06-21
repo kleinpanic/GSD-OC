@@ -64,7 +64,8 @@ function buildDocs(srcs: Source[]): GsdDoc[] {
       // Store a GENERIC provenance path (kind-relative) — NEVER the absolute build path, which would bake the
       // builder's $HOME/username into the shipped (public) corpus artifact.
       const provenance = `${src.kind}/${relative(src.root, path)}`;
-      docs.push({ id, kind: src.kind, path: provenance, title: titleOf(text, basename(path)), text, sha256: sha256(text) });
+      if (text.includes("\uFFFD")) console.warn(`[build-corpus] WARNING: ${id} contains U+FFFD replacement chars (corrupt UTF-8 in source) — shipping as-is`);
+      docs.push({ id, kind: src.kind, path: provenance, title: titleOf(text, basename(path, extname(path))), text, sha256: sha256(text) });
     }
   }
   return docs;
