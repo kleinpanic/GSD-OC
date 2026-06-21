@@ -2,19 +2,19 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, cpSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync, rmSync, cpSync } from "node:fs";
 import { enforceToolGate } from "../src/hooks/enforce-gate.js";
+import { scratchDir } from "./helpers/scratch.js";
 
 const fxRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures");
 const edit = { toolName: "edit", params: { file: "x.ts" } };
 
-/** Build a coding-workspace tmp dir (carries .git marker) with a given .planning fixture copied in. */
+/** Build a project scratch dir (carries .git marker) with a given .planning fixture copied in. Uses the canonical
+ *  scratch helper → os.tmpdir(), never ~/codeWS (enforced by test/no-workspace-pollution.test.ts). */
 function ws(planningFixture: string | null) {
-  const dir = mkdtempSync(join(tmpdir(), "gsd-enf-"));
+  const dir = scratchDir("enf");
   mkdirSync(join(dir, ".git"), { recursive: true });
   if (planningFixture) {
-    // mirror the fixture's files under <dir>/.planning
     const src = join(fxRoot, planningFixture);
     mkdirSync(join(dir, ".planning"), { recursive: true });
     cpSync(src, join(dir, ".planning"), { recursive: true });
@@ -56,7 +56,7 @@ test("ENF: greenfield (no .planning) is NOT blocked — never bricks a fresh pro
 });
 
 test("ENF: non-coding workspace is never gated", () => {
-  const dir = mkdtempSync(join(tmpdir(), "gsd-noenf-")); // no markers
+  const dir = scratchDir("noenf"); // no markers (canonical scratch)
   try {
     assert.equal(enforceToolGate(edit, {}, { cwd: dir }), undefined);
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -150,7 +150,7 @@ test("CR-3: a non-string derivedPaths element does not crash the gate (returns u
 });
 
 test("LOW-1: a FILE named .planning does not anchor a project root", () => {
-  const dir = mkdtempSync(join(tmpdir(), "gsd-fileplan-"));
+  const dir = scratchDir("fileplan");
   try {
     writeFileSync(join(dir, ".planning"), "i am a file");
     assert.equal(gsdProjectRoot(dir), undefined, ".planning file is not a project root");
@@ -158,7 +158,7 @@ test("LOW-1: a FILE named .planning does not anchor a project root", () => {
 });
 
 test("FALSE-ALLOW fix: a whitespace-padded mutating tool name is still gated (not bypassed)", () => {
-  const d = mkdtempSync(join(tmpdir(), "gsd-gatews-"));
+  const d = scratchDir("gatews");
   const p = join(d, ".planning"); mkdirSync(join(p, "phases"), { recursive: true });
   try {
     writeFileSync(join(p, "ROADMAP.md"), "### Phase 1: X\n**Goal:** g\n"); // pre-plan → discuss

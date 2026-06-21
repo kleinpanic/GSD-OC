@@ -74,6 +74,13 @@ Keep these in mind when adding modules that the build scripts pull in.
   test under `test/` (compiled into `dist-test/`). Trivial edits (cosmetic, docs-only,
   fewer than ~5 logical lines) are waived. The bar is: a behavior change without a test is
   not done.
+- **Test fixtures MUST use `test/helpers/scratch.ts`** (`scratchDir` / `scratchProject`),
+  which creates dirs under `os.tmpdir()/gsd-oc-tests` — OS-reaped, never the user's real
+  workspace. NEVER create fixture dirs under `homedir()` / `~/codeWS`: a single interrupted
+  run leaked 59 dirs into the user's workspace. This is **enforced** by
+  `test/no-workspace-pollution.test.ts` (the build fails if any test source writes under
+  `homedir()`), mirroring `test/no-forbidden-deps.test.ts`. Prose is not enforcement; a
+  failing test is.
 
 ## Commit and PR norms
 
