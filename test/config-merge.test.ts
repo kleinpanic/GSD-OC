@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
-import { readGsdConfig, setGsdConfigKey } from "../src/engine/config.js";
+import { readGsdConfig, setGsdConfigKey, defaultGsdConfig } from "../src/engine/config.js";
 
 test("H-1: a __proto__ key in config.json does not pollute the returned config's prototype", () => {
   const dir = mkdtempSync(join(tmpdir(), "gsd-cfg-"));
@@ -23,6 +23,16 @@ test("H-1: a scalar override of an object-typed field is rejected (keeps the def
     const { config } = readGsdConfig(dir);
     assert.equal(typeof config.workflow, "object", "workflow stays an object, not the string");
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("defaults include the real upstream keys (context_coverage_gate, plan_review_convergence, graphify, drift)", () => {
+  const d = defaultGsdConfig();
+  const w = d.workflow as Record<string, unknown>;
+  assert.equal(w.context_coverage_gate, true);
+  assert.equal(w.plan_review_convergence, false);
+  assert.equal(w.drift_threshold, 3);
+  assert.equal(w.drift_action, "warn");
+  assert.deepEqual(d.graphify, { enabled: false, build_timeout: 300 });
 });
 
 test("CFG-03: setGsdConfigKey writes a coerced nested key into SPARSE overrides", () => {

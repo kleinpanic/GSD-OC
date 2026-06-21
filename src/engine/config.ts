@@ -77,6 +77,7 @@ export function defaultGsdConfig(): GsdConfig {
     hooks: { context_warnings: false }, // default false (always)
     learning: { max_inject: 5 },
     intel: { enabled: false },
+    graphify: { enabled: false, build_timeout: 300 }, // optional project knowledge graph (external graphify CLI; off by default)
     // ── reference / surface / install profiles ──
     profiles: { active: null, surface: "default" }, // reference + surface (skill-surfacing) profiles
     discord_gates: false, // decision gates as Discord interactive components (with non-Discord fallback)
@@ -105,6 +106,8 @@ export function defaultGsdConfig(): GsdConfig {
       subagent_timeout: 300000, // OpenClaw subagent dispatch timeout (ms)
       drift_threshold: 3, // codebase-drift gate: min structural elements that trigger action (#2003)
       drift_action: "warn", // warn | auto-remap — drift gate response
+      context_coverage_gate: true, // plan/verify context-coverage gate (default true upstream; skip when false)
+      plan_review_convergence: false, // automated plan→review→replan loop (opt-in)
       use_worktrees: false, // OCT-5 parallel worktree isolation toggle
       enforce_tool_gate: true, // the before_tool_call edit gate (per-project override)
       inline_plan_threshold: 3, // plans ≤ N → inline (no separate PLAN.md fan-out)
