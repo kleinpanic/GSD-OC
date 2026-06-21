@@ -24,7 +24,10 @@ function escapeRegex(s: string): string {
  */
 export function normalizePhaseName(phase: string | number): string {
   const str = String(phase);
-  const stripped = str.replace(/^[A-Z]{1,6}-(?=\d)/, "");
+  // WARNING fix: `/i` — comparePhaseNum + phaseTokenMatches both strip the project-code prefix case-insensitively;
+  // this one was case-SENSITIVE, so a lowercase prefix ("ck-02") failed to normalize here while the siblings
+  // stripped it → the three lifecycle-ordering helpers disagreed on the same phase id.
+  const stripped = str.replace(/^[A-Z]{1,6}-(?=\d)/i, "");
   const match = stripped.match(/^(\d+)([A-Z])?((?:\.\d+)*)/i);
   if (match) {
     const padded = match[1].padStart(2, "0");
@@ -155,7 +158,10 @@ export function findPhase(planningDir: string, phase: string | number): FindPhas
   const dirMatch =
     match.match(/^(?:[A-Z]{1,6}-)(\d+[A-Z]?(?:\.\d+)*)-?(.*)/i) ||
     match.match(/^(\d+[A-Z]?(?:\.\d+)*)-?(.*)/i);
-  const phaseNumber = dirMatch ? dirMatch[1] : normalized;
+  // WARNING fix (#6): normalize the returned phase_number so "2-foo" and "02-foo" both yield "02" — consumers
+  // were getting the raw, inconsistently-padded dir prefix and re-padding (route) or stripping (parallel-plan) it
+  // ad-hoc. Returning the canonical form makes the value consistent across the lifecycle.
+  const phaseNumber = dirMatch ? normalizePhaseName(dirMatch[1]) : normalized;
   const phaseName = dirMatch && dirMatch[2] ? dirMatch[2] : null;
 
   const phaseDir = path.join(phasesDir, match);

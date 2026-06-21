@@ -61,7 +61,10 @@ export class CosineBackend implements VectorBackend {
       const base = r * dim;
       let dot = 0;
       for (let i = 0; i < dim; i++) dot += q[i] * matrix[base + i];
-      scored.push({ chunkId: chunkIds[r], score: dot });
+      // WARNING fix: a corrupt stored row (NaN/Infinity that passed the %4 + length guards) yields a non-finite
+      // dot, and `b.score - a.score` on a NaN makes the comparator inconsistent → a partially-unsorted ranking.
+      // DROP the bad row instead of letting it poison the whole result order.
+      if (Number.isFinite(dot)) scored.push({ chunkId: chunkIds[r], score: dot });
     }
     scored.sort((a, b) => b.score - a.score || (a.chunkId < b.chunkId ? -1 : 1));
     return scored.slice(0, Math.max(0, topK));
