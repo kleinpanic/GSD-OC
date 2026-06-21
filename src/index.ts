@@ -18,6 +18,8 @@ import { enforceToolGate, enforceSpawnPersona, gsdProjectRoot } from "./hooks/en
 import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
 import { addPhase, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone } from "./engine/lifecycle.js";
 import { scaffoldPlanning } from "./engine/scaffold.js";
+import { buildProgress } from "./engine/progress.js";
+import { undoLast } from "./engine/undo.js";
 import { createAutoRepo, type RepoMode } from "./engine/repo.js";
 import { createWorkBranch } from "./engine/branch.js";
 import { resolveReviewer, crossAiReview, type ReviewFinding } from "./orchestrate/cross-ai-review.js";
@@ -108,7 +110,7 @@ const commandParams = Type.Object(
 /** TypeBox schema for the gsd_state mutation tool (ENG-WRITE-01). */
 const stateParams = Type.Object(
   {
-    op: Type.String({ description: "init | branch | set-status | record-progress | add-decision | add-blocker | add-phase | scaffold-phase | update-plan-progress | complete-phase | complete-requirement | complete-milestone" }),
+    op: Type.String({ description: "init | branch | progress | undo | set-status | record-progress | add-decision | add-blocker | add-phase | scaffold-phase | update-plan-progress | complete-phase | complete-requirement | complete-milestone" }),
     status: Type.Optional(Type.String({ description: "For set-status (e.g. planning|executing|complete|error)." })),
     decision: Type.Optional(Type.String({ description: "For add-decision: the decision text." })),
     blocker: Type.Optional(Type.String({ description: "For add-blocker: the blocker text." })),
@@ -519,6 +521,8 @@ const entry = definePluginEntry({
               }
               return { ok: true, op: args.op, ...scaffolded, ...(repo ? { repo } : {}) };
             }
+            case "progress": return { ok: true, op: args.op, ...buildProgress(dir) };
+            case "undo": return { op: args.op, ...undoLast(path.dirname(dir)) };
             case "branch": {
               const git = (readGsdConfig(dir).config.git ?? {}) as Record<string, unknown>;
               return { op: args.op, ...createWorkBranch(path.dirname(dir), git, (args.kind as never) ?? "phase", { phase: args.phase, milestone: args.version, slug: args.name }) };
