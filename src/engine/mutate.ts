@@ -31,11 +31,14 @@ function scalar(value: string): string {
 }
 
 /** Normalize CRLF→LF for matching but REMEMBER the original ending, so a CRLF file isn't rewritten whole to LF
- *  on a one-field change (WR-01). Returns [lfContent, restore] where restore re-applies CRLF iff the input had it. */
+ *  on a one-field change (WR-01). Restore CRLF ONLY for a UNIFORMLY-CRLF file — a mixed-ending file normalizes
+ *  to LF rather than promoting its bare-LF lines to CRLF (which would mutate lines the transform never touched). */
 function withEol(content: string): [string, (s: string) => string] {
-  const hadCrlf = /\r\n/.test(content);
+  const crlfCount = (content.match(/\r\n/g) || []).length;
+  const bareLfCount = (content.match(/(?<!\r)\n/g) || []).length;
+  const uniformCrlf = crlfCount > 0 && bareLfCount === 0;
   const lf = content.replace(/\r\n/g, "\n");
-  return [lf, (s) => (hadCrlf ? s.replace(/\n/g, "\r\n") : s)];
+  return [lf, (s) => (uniformCrlf ? s.replace(/\n/g, "\r\n") : s)];
 }
 
 /** Set a top-level scalar frontmatter field (creates the frontmatter block if absent). */
