@@ -103,6 +103,8 @@ export function defaultGsdConfig(): GsdConfig {
       skip_discuss: false,
       max_discuss_passes: 3,
       subagent_timeout: 300000, // OpenClaw subagent dispatch timeout (ms)
+      drift_threshold: 3, // codebase-drift gate: min structural elements that trigger action (#2003)
+      drift_action: "warn", // warn | auto-remap — drift gate response
       use_worktrees: false, // OCT-5 parallel worktree isolation toggle
       enforce_tool_gate: true, // the before_tool_call edit gate (per-project override)
       inline_plan_threshold: 3, // plans ≤ N → inline (no separate PLAN.md fan-out)
