@@ -7,6 +7,20 @@
  */
 import { createWorktree, mergeAndRemoveWorktree, removeWorktree } from "../engine/worktree.js";
 import { runSubagent, type RunSubagentApi } from "../dispatch/run-subagent.js";
+import { findPhase } from "../engine/phase.js";
+
+/** Discover the executable units (one per PLAN.md) for a phase — the input to runExecuteWave. Worktree names are
+ *  derived from the phase + plan index (unique, injection-safe). dependsOn is empty (plans within a phase are
+ *  independent by default; a planner that declares cross-plan order would populate it). */
+export function discoverPlanUnits(planningDir: string, phase: string | number): ExecUnit[] {
+  const found = findPhase(planningDir, phase);
+  if (!found.found) return [];
+  return found.plans.map((planFile, i) => {
+    const idx = /(\d+)-(\d+)-PLAN/.exec(planFile)?.[2] ?? String(i + 1);
+    const ph = String(found.phase_number ?? phase).replace(/\D/g, "") || "0";
+    return { planId: `${ph}-${idx}`, planPath: planFile, worktreeName: `exec-${ph}-${idx}`, dependsOn: [] };
+  });
+}
 
 export interface ExecUnit {
   planId: string;

@@ -84,3 +84,22 @@ test("CR-01: a unit whose dependency did NOT merge is SKIPPED (not run against a
   assert.equal(b!.status, "failed");
   assert.match(b!.output!, /dependency A did not merge/);
 });
+
+test("discoverPlanUnits: builds ExecUnits from a phase's PLAN.md files", async () => {
+  const { discoverPlanUnits } = await import("../src/orchestrate/parallel-plan.js");
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const d = mkdtempSync(join(tmpdir(), "gsd-dpu-"));
+  const ph = join(d, ".planning", "phases", "02-auth"); mkdirSync(ph, { recursive: true });
+  try {
+    writeFileSync(join(ph, "02-01-PLAN.md"), "#");
+    writeFileSync(join(ph, "02-02-PLAN.md"), "#");
+    const units = discoverPlanUnits(join(d, ".planning"), "2");
+    assert.equal(units.length, 2);
+    assert.deepEqual(units.map((u) => u.planId), ["02-01", "02-02"]);
+    assert.deepEqual(units.map((u) => u.worktreeName), ["exec-02-01", "exec-02-02"]);
+    // no plans → empty
+    assert.deepEqual(discoverPlanUnits(join(d, ".planning"), "9"), []);
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});

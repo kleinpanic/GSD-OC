@@ -15,6 +15,7 @@ import { embedAvailable } from "./retrieval/embed.js";
 import { selectPath } from "./orchestrate/select-path.js";
 import { readGsdConfig, bootstrapGsdConfig } from "./engine/config.js";
 import { resolveProfiledConfig, applySurfaceProfile, isSurfaceProfile } from "./engine/profile.js";
+import { route as routeEngine } from "./engine/route.js";
 import { enforceToolGate, enforceSpawnPersona, gsdProjectRoot } from "./hooks/enforce-gate.js";
 import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
 import { addPhase, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone } from "./engine/lifecycle.js";
@@ -38,6 +39,7 @@ import { resolveAgentOptional } from "./agents/index.js";
 import { resolveWorkstreamDir, listWorkstreams, createWorkstream, switchWorkstream, completeWorkstream, suggestWorkstream, activeWorkstream } from "./engine/workstream.js";
 import { executePath, makeSubagentDispatcher } from "./orchestrate/execute-path.js";
 import { runAutonomous, makeActionDispatcher } from "./orchestrate/autonomous.js";
+import { runExecuteWave, makeUnitDispatcher, discoverPlanUnits } from "./orchestrate/parallel-plan.js";
 
 const PLUGIN_ID = "gsd-oc";
 const PLUGIN_NAME = "GSD-OC";
@@ -148,6 +150,9 @@ const orchestrateParams = Type.Object(
     ),
     autonomous: Type.Optional(
       Type.Boolean({ description: "Drive the FULL multi-phase loop (re-read route() per step until the milestone completes), not just a single path. Honors autoGates + a no-progress guard." }),
+    ),
+    wave: Type.Optional(
+      Type.Boolean({ description: "Execute the active phase's plans as a PARALLEL wave — concurrent executors, each in its own git worktree, merges serialized (--wave). Requires a git repo." }),
     ),
   },
   { additionalProperties: false },
@@ -298,7 +303,7 @@ const entry = definePluginEntry({
       parameters: orchestrateParams,
       async execute(
         _toolCallId: string,
-        args: { intent?: string; drive?: boolean; autoGates?: boolean; autonomous?: boolean },
+        args: { intent?: string; drive?: boolean; autoGates?: boolean; autonomous?: boolean; wave?: boolean },
         _signal?: unknown,
         _onUpdate?: unknown,
         context?: { api?: unknown },
@@ -339,6 +344,19 @@ const entry = definePluginEntry({
         const baseAgent = (typeof pluginConfig?.workerAgent === "string" && pluginConfig.workerAgent) || "dev";
         if ((args?.autonomous || args?.drive) && !runtimeApi) {
           return { ...planned, drive_available: false, note: "subagent runtime not reachable from the plugin in this host — the agent must dispatch each step via its own sessions_spawn tool" };
+        }
+        if (args?.wave && runtimeApi) {
+          // Parallel execute WAVE (--wave): fan out the active phase's PLAN.md units as CONCURRENT executors,
+          // each in its own worktree, with SERIALIZED merges (OCT-5). Requires a git repo + an active phase.
+          const repoRoot = gsdProjectRoot(process.cwd());
+          if (!repoRoot) return { ...planned, wave: true, error: "not a git repo — worktree isolation unavailable" };
+          const trackDir = resolveWorkstreamDir(`${repoRoot}/.planning`);
+          const phase = routeEngine(trackDir).phase;
+          if (!phase) return { ...planned, wave: true, error: "no active phase to fan out" };
+          const units = discoverPlanUnits(trackDir, phase);
+          if (!units.length) return { ...planned, wave: true, error: `phase ${phase} has no PLAN.md units to run` };
+          const result = await runExecuteWave(units, makeUnitDispatcher(runtimeApi as never, intent, repoRoot, baseAgent), { maxConcurrency: 4 });
+          return { ...planned, wave: true, phase, allMerged: result.allMerged, failedUnits: result.failedUnits, units: result.units.map((u) => ({ planId: u.unit.planId, status: u.status })) };
         }
         if (args?.autonomous && runtimeApi) {
           // OCT-W5: the FULL multi-phase autonomous loop — re-reads route() per step, advancing on-disk state
