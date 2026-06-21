@@ -97,7 +97,7 @@ function hasCodingMarker(dir: string): boolean {
  */
 export function isCodingWorkspace(
   dir: string | undefined,
-  roots: string[] = [],
+  roots: string[] = codingWorkspaceRoots(), // default includes $HOME/codeWS (callers like bootstrap-inject rely on it)
 ): boolean {
   if (!dir) return false;
   const target = resolve(dir);
