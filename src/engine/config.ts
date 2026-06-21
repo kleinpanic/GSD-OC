@@ -36,6 +36,7 @@ export function defaultGsdConfig(): GsdConfig {
     mode: "interactive", // interactive | auto — autonomous-vs-gated lifecycle
     model_profile: "balanced",
     model_profile_overrides: {}, // per-agent model overrides (resolveModel honors these)
+    model_provider: "anthropic", // provider the opus/sonnet/haiku tiers resolve under (configurable; see resolveModel)
     effort: { default: "high" }, // OpenClaw model effort tier
     granularity: "standard", // coarse | standard | fine — top-level plan granularity
     phase_naming: "sequential",

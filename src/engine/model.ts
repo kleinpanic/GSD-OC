@@ -68,6 +68,9 @@ export const AGENT_CATALOG: Record<string, AgentCatalogEntry> = {
 export type ModelConfig = {
   model_profile?: string;
   model_profile_overrides?: Record<string, string>;
+  /** Provider that the bare opus/sonnet/haiku tiers resolve under (default "anthropic" — where those tier names
+   *  live). Lets a non-Anthropic setup qualify the tiers, though such users typically use 'inherit' or per-agent refs. */
+  model_provider?: string;
 };
 
 /**
@@ -85,12 +88,28 @@ export type ModelConfig = {
  */
 const VALID_OVERRIDE_TIERS = new Set<string>(["opus", "sonnet", "haiku", "inherit"]);
 
+/**
+ * Qualify a bare tier alias into a fully-resolvable model ref. opus/sonnet/haiku are ANTHROPIC-provider-scoped
+ * aliases; OpenClaw's DEFAULT provider is OpenAI, so a bare "opus" resolves to "openai/opus" → fails on a stock
+ * gateway (per-agent routing was silently broken by default). Prefixing the provider makes the tier resolve
+ * regardless of the gateway default. `model_provider` is configurable (default "anthropic" — that's where these
+ * tier names live); a value already carrying a provider ("glm/glm-4.6") is a full ref and passes through.
+ */
+function qualifyModel(value: string, config: ModelConfig): string {
+  if (value.includes("/")) return value; // already a provider/model ref
+  const provider = typeof config.model_provider === "string" && config.model_provider ? config.model_provider : "anthropic";
+  return `${provider}/${value}`;
+}
+
 export function resolveModel(agentId: string, config: ModelConfig = {}): string | null {
   const override = config.model_profile_overrides?.[agentId];
-  if (typeof override === "string" && VALID_OVERRIDE_TIERS.has(override)) {
-    // CR-03: "inherit" means LEAVE the parent model — return null so the caller doesn't set runParams.model to the
-    // literal string "inherit" (not a real model ref/alias). A real tier (opus/sonnet/haiku) is returned as-is.
-    return override === "inherit" ? null : override;
+  if (typeof override === "string" && override) {
+    // CR-03: "inherit" means LEAVE the parent model — return null. A full provider/model ref passes through (any
+    // provider, for non-Anthropic users); a bare tier (opus/sonnet/haiku) is qualified so it actually resolves.
+    if (override === "inherit") return null;
+    if (override.includes("/")) return override; // explicit provider/model ref — honor as-is
+    if (VALID_OVERRIDE_TIERS.has(override)) return qualifyModel(override, config);
+    // an unrecognized bare override tier falls through to profile resolution (M-03)
   }
 
   const requested = config.model_profile;
@@ -98,12 +117,13 @@ export function resolveModel(agentId: string, config: ModelConfig = {}): string 
     ? (requested as Profile)
     : "balanced";
 
-  if (profile === "inherit") return null; // CR-03: inherit ⇒ leave the parent model (was returning "inherit")
+  if (profile === "inherit") return null; // CR-03: inherit ⇒ leave the parent model (the cross-provider path)
 
   const entry = AGENT_CATALOG[agentId];
   if (!entry) return null;
 
-  if (profile === "adaptive") return ADAPTIVE_TIER_MAP[entry.routingTier];
-  // quality | balanced | budget map directly to the per-agent tier columns.
-  return entry[profile] ?? entry.balanced;
+  // quality | balanced | budget map to the per-agent tier columns; adaptive maps via routingTier. Qualify the
+  // resulting bare tier with the provider so it resolves on any gateway (default Anthropic, configurable).
+  const tier = profile === "adaptive" ? ADAPTIVE_TIER_MAP[entry.routingTier] : entry[profile] ?? entry.balanced;
+  return qualifyModel(tier, config);
 }
