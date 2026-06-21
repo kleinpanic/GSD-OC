@@ -173,14 +173,15 @@ function verificationPassed(planningDir: string, phaseNum: string): boolean {
     } catch {
       continue;
     }
-    // M-2: mirror hasUnresolvedVerificationFail exactly — split lines, skip `#` headings, and anchor the
-    // verdict to a field value or a delimited table cell. The old bare `(^|\|)PASS($)` alternative matched
-    // ANY standalone `PASS` line (incl. a `# PASSED` heading), a false-positive that could advance the route
-    // loop and make complete-milestone reachable prematurely.
+    // M-2: split lines, skip `#` headings, and anchor the verdict to a field value or a delimited table cell
+    // (the old bare `(^|\|)PASS($)` matched ANY standalone `PASS` line incl. a `# PASSED` heading — a
+    // false-positive that could complete-milestone prematurely). R7-HIGH: strip markdown bold markers first so
+    // `**Status:** PASSED` (the standard GSD verdict convention, used in every real VERIFICATION.md) is
+    // recognized — mirroring readStatus + hasUnresolvedVerificationFail, which both tolerate bold.
     let passed = false;
     for (const raw of text.split("\n")) {
-      const ln = raw.trim();
-      if (ln.startsWith("#")) continue; // a heading is never a verdict
+      if (raw.trim().startsWith("#")) continue; // a heading is never a verdict
+      const ln = raw.replace(/\*\*/g, "").trim(); // drop bold so `**Status:**` reads as `Status:`
       if (
         /^(status|result|verdict|outcome)\b[ \t]*[:=][ \t]*"?\s*pass(ed)?\b/i.test(ln) ||
         /^\|.*\bPASS(ED)?\b.*\|$/i.test(ln)
