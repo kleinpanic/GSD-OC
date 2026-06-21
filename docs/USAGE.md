@@ -126,7 +126,7 @@ The plugin registers **10 tools** — four named tools plus six namespace router
 | Tool | Fires when | Source |
 |---|---|---|
 | `gsd_orchestrate` | Route an intent through the lifecycle. Returns the ordered GSD path; pass `drive:true` to dispatch each step as a subagent (halts at gates), `autoGates:true` for an autonomous run. | `src/index.ts:196-265` |
-| `gsd_retrieve` | Hybrid skill/subagent retrieval for a free-text intent (semantic + BM25 + trigram, RRF-fused). Surfaces long-tail skills the routers miss, e.g. "the build is flaky" → `gsd-debug`. | `src/index.ts:270-294` |
+| `gsd_retrieve` | Hybrid skill/subagent retrieval for a free-text intent (semantic + BM25 + trigram, RRF-fused). Surfaces long-tail skills the routers miss, e.g. "the build is flaky" → `gsd-debugger`. | `src/index.ts:270-294` |
 | `gsd_settings` | Inspect the project's GSD config (model profile, workflow toggles, git) from `.planning/config.json` with defaults applied. `{bootstrap:true}` writes a default config if none exists (never overwrites). | `src/index.ts:299-311` |
 | `gsd_state` | Advance `.planning/STATE.md` atomically (`op`: `set-status` \| `record-progress` \| `add-decision` \| `add-blocker`). Call as GSD work completes so route() sees live state. | `src/index.ts:316-348` |
 | `gsd_workflow` | Router: phase-pipeline intent (discuss/plan/execute/verify/phase/progress). | `src/routers/routers.ts:20-27` |

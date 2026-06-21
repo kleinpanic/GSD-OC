@@ -56,7 +56,7 @@ kind: [REF: src/retrieval/vectors.manifest.json:1]
 The `workflow` kind is walked recursively, so it captures both the top-level
 workflows and the nested sub-workflow files. The `agent` kind is filtered to
 files matching `gsd-*.md`, so only GSD subagents enter the corpus.
-[REF: src/retrieval/build-corpus.ts:41] [REF: src/retrieval/detect.ts:89-94]
+[REF: scripts/build-corpus.ts:41] [REF: src/retrieval/detect.ts:89-94]
 
 A document is one source markdown file; its stable id is
 `${kind}:${relpath-without-ext}` (e.g. `workflow:plan-phase`,
