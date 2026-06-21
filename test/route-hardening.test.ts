@@ -112,3 +112,28 @@ test("R7-HIGH: a bold-markdown '**Status:** PASSED' verdict IS recognized (route
     assert.notEqual(route(bare.planning).action, "complete-milestone");
   } finally { rmSync(bare.root, { recursive: true, force: true }); }
 });
+
+test("R8-HIGH: a bold-field '**Status:** FAILED' verdict HALTS (and a conflicting pass+fail does not ship)", () => {
+  function mk(verif: string) {
+    const root = mkdtempSync(join(tmpdir(), "gsd-r8-"));
+    const planning = join(root, ".planning");
+    const pd = join(planning, "phases", "01-a");
+    mkdirSync(pd, { recursive: true });
+    writeFileSync(join(planning, "ROADMAP.md"), "### Phase 1: A\n**Goal:** g\n");
+    writeFileSync(join(pd, "01-01-PLAN.md"), "# plan\n");
+    writeFileSync(join(pd, "01-01-SUMMARY.md"), "# summary\n");
+    writeFileSync(join(pd, "1-VERIFICATION.md"), verif);
+    return { root, planning };
+  }
+  const failed = mk("# Verification\n\n**Status:** FAILED\n");
+  try {
+    const r = route(failed.planning);
+    assert.equal(r.reason, "verification-fail", "bold FAIL must halt");
+    assert.equal(r.action, "halt");
+  } finally { rmSync(failed.root, { recursive: true, force: true }); }
+  // conflicting: a bold PASS line AND a bold FAIL line — the unresolved FAIL must win (no premature ship)
+  const conflict = mk("**Status:** PASSED\n\n**Result:** FAILED -- regression in module X\n");
+  try {
+    assert.notEqual(route(conflict.planning).action, "complete-milestone", "an unresolved FAIL must block the ship");
+  } finally { rmSync(conflict.root, { recursive: true, force: true }); }
+});
