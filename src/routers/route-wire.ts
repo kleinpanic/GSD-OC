@@ -42,8 +42,11 @@ function mapRouteResult(namespace: string, result: RouteResult): WiredRouteHit {
 export function wireRouterExecute(
   def: RouterDef,
   planningDir = ".planning",
-): (params?: { intent?: string }) => Promise<WiredRouteHit> {
-  return async (_params?: { intent?: string }): Promise<WiredRouteHit> => {
+): (toolCallId: string, params?: { intent?: string }) => Promise<WiredRouteHit> {
+  // SDK contract: registerTool invokes execute(toolCallId, params, signal, onUpdate) — params is the
+  // SECOND arg, not the first. route() is state-driven so intent is unused, but the signature must match
+  // or a future router that reads `intent` would silently receive the callId string instead.
+  return async (_toolCallId: string, _params?: { intent?: string }): Promise<WiredRouteHit> => {
     // Flow-5: route over the same track gsd_state mutates. For the default, walk UP from cwd to the GSD project
     // root (matching gsd_state + enforce-gate, which use gsdProjectRoot) before resolving the active workstream —
     // so all three agree on WHICH project even when cwd is the gateway home, not the project dir. Explicit dir honored.

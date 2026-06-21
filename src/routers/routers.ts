@@ -107,7 +107,7 @@ export function buildRouterTools() {
       { intent: Type.Optional(Type.String({ description: "Freeform intent to route." })) },
       { additionalProperties: false },
     ),
-    execute: async (params: { intent?: string }): Promise<RouteHit> => routeIntent(def, params?.intent),
+    execute: async (_toolCallId: string, params?: { intent?: string }): Promise<RouteHit> => routeIntent(def, params?.intent),
   }));
 }
 

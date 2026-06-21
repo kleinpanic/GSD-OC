@@ -12,7 +12,7 @@ const wf = ROUTERS.find((r) => r.name === "gsd_workflow")!;
 
 test("wired execute returns route()'s authoritative {next_verb,reason,args} (RTE-01, D-01)", async () => {
   // route-incomplete: Route 0 → execute-phase, phase 1, resume-incomplete.
-  const hit = await wireRouterExecute(wf, fx("route-incomplete"))({ intent: "do something" });
+  const hit = await wireRouterExecute(wf, fx("route-incomplete"))("call", { intent: "do something" });
   assert.equal(hit.namespace, "workflow");
   assert.equal(hit.next_verb, "execute-phase");
   assert.equal(hit.reason, "resume-incomplete");
@@ -21,7 +21,7 @@ test("wired execute returns route()'s authoritative {next_verb,reason,args} (RTE
 
 test("wired execute surfaces a halt result without throwing (hard-stop gate)", async () => {
   // route-gates: .continue-here.md → halt / unresolved-checkpoint.
-  const hit = await wireRouterExecute(wf, fx("route-gates"))();
+  const hit = await wireRouterExecute(wf, fx("route-gates"))("call");
   assert.equal(hit.next_verb, "halt");
   assert.equal(hit.reason, "unresolved-checkpoint");
   assert.deepEqual(hit.args, {});
@@ -29,7 +29,7 @@ test("wired execute surfaces a halt result without throwing (hard-stop gate)", a
 
 test("wired execute maps a no-phase route() to bounded args", async () => {
   // route-complete: Route 5 → verify-work, phase 1.
-  const hit = await wireRouterExecute(wf, fx("route-complete"))();
+  const hit = await wireRouterExecute(wf, fx("route-complete"))("call");
   assert.equal(hit.next_verb, "verify-work");
   assert.equal(hit.reason, "all-summaries");
   assert.deepEqual(hit.args, { phase: "1" });
@@ -40,7 +40,7 @@ test("next_verb is route().action (authoritative), NOT routeIntent().matched (an
   // ignores intent and returns the state-aware route() verb. They must differ here.
   const intent = "I want to map the codebase right now";
   const staticHit = routeIntent(wf, intent); // matched ∈ workflow verbs or null
-  const wiredHit = await wireRouterExecute(wf, fx("route-incomplete"))({ intent });
+  const wiredHit = await wireRouterExecute(wf, fx("route-incomplete"))("call", { intent });
   assert.notEqual(wiredHit.next_verb, staticHit.matched);
   assert.equal(wiredHit.next_verb, "execute-phase");
 });
@@ -57,6 +57,6 @@ test("buildWiredRouterTools produces 6 callable descriptors with TypeBox params"
     assert.ok(typeof t.execute === "function");
     assert.ok(t.parameters, "tool has TypeBox parameters");
   }
-  const hit = await tools[0].execute({});
+  const hit = await tools[0].execute("call", {});
   assert.equal(hit.next_verb, "execute-phase");
 });
