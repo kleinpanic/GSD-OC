@@ -42,6 +42,9 @@ export function gsdAgentsSection(): string {
     "in order (research → codebase-map → plan → execute → verify → ship). Persist artifacts under",
     "`.planning/` in this project directory. Skip ALL of this only for trivial chat / quick one-offs.",
     "",
+    "During RESEARCH and PLANNING, ground decisions in real sources — prefer (when available) context7 for",
+    "library/API docs, and firecrawl / exa / brave / WebSearch for the web. Do not invent API shapes.",
+    "",
     "Opt out for this project by deleting this block or adding a `.gsd-off` file to the project root.",
     GSD_END,
   ].join("\n");
