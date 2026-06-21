@@ -166,7 +166,11 @@ export function readGsdConfig(planningDir = ".planning"): { config: GsdConfig; s
     // `overrides` is the SPARSE parsed file (only the keys the project actually set) — callers that layer a
     // .gsd-profile / surface profile must merge `overrides` LAST (not the defaulted `config`, which would clobber
     // the profile with defaults on every unset key — the Flow-6 bug).
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const parsed: unknown = JSON.parse(raw);
+    // #7: a config.json whose root is an ARRAY / scalar / null is malformed. deepMerge already rejects it (returns
+    // defaults), but reporting source:"file" + overrides:[array] let the bogus array flow into resolveProfiledConfig
+    // (Object.keys([...]).length is truthy). Treat a non-object root as a config ERROR → defaults, empty overrides.
+    if (!isObject(parsed)) return { config: defaultGsdConfig(), source: "default", overrides: {} };
     return { config: deepMerge(defaultGsdConfig(), parsed), source: "file", overrides: parsed };
   } catch {
     return { config: defaultGsdConfig(), source: "default", overrides: {} };

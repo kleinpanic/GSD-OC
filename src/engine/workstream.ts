@@ -59,6 +59,17 @@ export interface WorkstreamInfo {
   dir: string;
 }
 
+/** Read the ORIGINAL name a workstream was created with (the `workstream:` frontmatter field), for collision
+ *  detection. Returns null if absent/unreadable. */
+function readWorkstreamName(dir: string): string | null {
+  try {
+    const m = /^---\n[\s\S]*?\bworkstream:[ \t]*"?([^"\n]+)"?/m.exec(fs.readFileSync(path.join(dir, "STATE.md"), "utf8"));
+    return m?.[1]?.trim() ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** List all workstreams with their status (read from each track's STATE.md frontmatter). */
 export function listWorkstreams(planningDir: string): WorkstreamInfo[] {
   const root = workstreamsRoot(planningDir);
@@ -90,13 +101,19 @@ const SEED_ROADMAP = (name: string): string =>
 
 /** Create a workstream `<slug>/` with a seeded STATE.md + ROADMAP.md + phases/. Sets it active if it's the
  *  first. Idempotent: returns created:false if it already exists. */
-export function createWorkstream(planningDir: string, name: string): { created: boolean; slug: string; dir: string } {
+export function createWorkstream(planningDir: string, name: string): { created: boolean; slug: string; dir: string; collision?: string } {
   const slug = workstreamSlug(name);
   const dir = path.join(workstreamsRoot(planningDir), slug);
-  if (fs.existsSync(dir)) return { created: false, slug, dir };
+  if (fs.existsSync(dir)) {
+    // #9: two DIFFERENT names can slug identically ("Auth Flow" vs "auth-flow") → the second would silently route
+    // into the first's dir. Surface the collision: read the existing track's stored name; if it differs, the caller
+    // is reusing a different-named track, not creating one.
+    const existing = readWorkstreamName(dir);
+    return { created: false, slug, dir, ...(existing && existing !== name ? { collision: existing } : {}) };
+  }
   fs.mkdirSync(path.join(dir, "phases"), { recursive: true });
-  fs.writeFileSync(path.join(dir, "STATE.md"), SEED_STATE(slug));
-  fs.writeFileSync(path.join(dir, "ROADMAP.md"), SEED_ROADMAP(slug));
+  fs.writeFileSync(path.join(dir, "STATE.md"), SEED_STATE(name)); // store the ORIGINAL name (not the slug) for collision detection
+  fs.writeFileSync(path.join(dir, "ROADMAP.md"), SEED_ROADMAP(name));
   if (!activeWorkstream(planningDir)) switchWorkstream(planningDir, slug); // first one becomes active
   return { created: true, slug, dir };
 }
