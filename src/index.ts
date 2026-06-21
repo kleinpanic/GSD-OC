@@ -33,6 +33,7 @@ import { scanUat, auditOpen } from "./engine/audit.js";
 import { projectStats } from "./engine/stats.js";
 import { codebaseDrift } from "./engine/drift.js";
 import { graphifyQuery, graphifyStatus, graphifyDiff } from "./engine/graphify.js";
+import { intelQuery, intelStatus, intelExtractExports } from "./engine/intel.js";
 import { pauseWork, resumeWork, writeThread, listThreads, closeThread, capture } from "./engine/session.js";
 import { buildCheckpoint, renderCheckpointDiscord, parseCheckpointReply, type CheckpointType, type GateOption } from "./engine/checkpoint.js";
 import { addLearning, queryLearnings, pruneLearnings } from "./engine/learnings.js";
@@ -90,10 +91,11 @@ const sessionParams = Type.Object(
 /** TypeBox schema for gsd_verify — native integrity checks (validate-artifacts gate + verify/validate verbs). */
 const verifyParams = Type.Object(
   {
-    op: Type.Union([Type.Literal("validate-artifacts"), Type.Literal("phase-completeness"), Type.Literal("consistency"), Type.Literal("gap"), Type.Literal("uat"), Type.Literal("audit-open"), Type.Literal("stats"), Type.Literal("codebase-drift"), Type.Literal("graphify-query"), Type.Literal("graphify-status"), Type.Literal("graphify-diff"), Type.Literal("health")], { description: "validate-artifacts | phase-completeness | consistency | gap | uat | audit-open | stats | codebase-drift | graphify-query | graphify-status | graphify-diff | health" }),
+    op: Type.Union([Type.Literal("validate-artifacts"), Type.Literal("phase-completeness"), Type.Literal("consistency"), Type.Literal("gap"), Type.Literal("uat"), Type.Literal("audit-open"), Type.Literal("stats"), Type.Literal("codebase-drift"), Type.Literal("graphify-query"), Type.Literal("graphify-status"), Type.Literal("graphify-diff"), Type.Literal("intel-query"), Type.Literal("intel-status"), Type.Literal("intel-exports"), Type.Literal("health")], { description: "validate-artifacts | phase-completeness | consistency | gap | uat | audit-open | stats | codebase-drift | graphify-query | graphify-status | graphify-diff | intel-query | intel-status | intel-exports | health" }),
     phase: Type.Optional(Type.String({ description: "Phase number (for phase-completeness)." })),
-    term: Type.Optional(Type.String({ description: "Search term (for graphify-query)." })),
+    term: Type.Optional(Type.String({ description: "Search term (for graphify-query / intel-query)." })),
     budget: Type.Optional(Type.Number({ description: "Optional token budget cap (for graphify-query)." })),
+    file: Type.Optional(Type.String({ description: "Source file path (for intel-exports)." })),
   },
   { additionalProperties: false },
 );
@@ -679,7 +681,7 @@ const entry = definePluginEntry({
       description:
         "Run native GSD integrity checks (op: validate-artifacts | phase-completeness | consistency | health). Returns {ok, defects[]} — validate-artifacts is the write-guarantee gate (an artifact is valid iff route() can drive it).",
       parameters: verifyParams,
-      async execute(_toolCallId: string, args: { op?: string; phase?: string; term?: string; budget?: number }, _signal?: unknown) {
+      async execute(_toolCallId: string, args: { op?: string; phase?: string; term?: string; budget?: number; file?: string }, _signal?: unknown) {
         const root = gsdProjectRoot(process.cwd());
         const base = root ? `${root}/.planning` : ".planning";
         const dir = resolveWorkstreamDir(base);
@@ -703,6 +705,13 @@ const entry = definePluginEntry({
               return { ok: true, ...graphifyQuery(dir, args.term, { budget: args.budget ?? null }) };
             case "graphify-status": return { ok: true, ...graphifyStatus(dir) };
             case "graphify-diff": return { ok: true, ...graphifyDiff(dir) };
+            case "intel-query":
+              if (!args.term) return { ok: false, error: "intel-query requires term" };
+              return { ok: true, ...intelQuery(dir, args.term) };
+            case "intel-status": return { ok: true, ...intelStatus(dir) };
+            case "intel-exports":
+              if (!args.file) return { ok: false, error: "intel-exports requires file" };
+              return { ok: true, ...intelExtractExports(args.file) };
             case "health": return validateHealth(dir);
             default: return { ok: false, error: `unknown op: ${args?.op}` };
           }
