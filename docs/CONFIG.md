@@ -57,3 +57,16 @@ review delegates to a different model via the OpenClaw ACP seam (`subagent.run({
 - `gsd_settings` — inspect the project config (defaults applied); `{bootstrap:true}` writes a default if absent.
 - `gsd_state {op:"init"}` — scaffold a full `.planning/` (config + STATE/ROADMAP/REQUIREMENTS/PROJECT), validated.
 - Engagement (`engageMode`/`codingRoots`) is the operator layer; see [USAGE.md](USAGE.md).
+
+## Advisory vs engine-enforced keys
+
+Most `workflow.*` keys are **engine-enforced** (read by route/enforce-gate/orchestrate and change behavior):
+`enforce_tool_gate`, `use_worktrees`, `auto_advance`, `auto_verify`, `skip_discuss`, `ui_safety_gate`,
+`ai_integration_phase`, `pattern_mapper`, `nyquist_validation`, `security_enforcement`, plus `mode`, `git.*`,
+`review.*`, `manager.flags`, the research-provider toggles, and the profile layer.
+
+A few are **advisory** — surfaced to the agent via `gsd_settings` and honored in the subagent prompts rather than
+enforced by an engine branch: `research_before_questions`, `node_repair`/`node_repair_budget`, `auto_prune_state`,
+`inline_plan_threshold`, `security_block_on`, `code_review_depth`, `learning.max_inject`, `granularity`. These are
+intentional knobs the planner/executor/reviewer subagents read; they are not dead — they shape agent behavior, not
+control flow.
