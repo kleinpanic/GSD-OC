@@ -144,6 +144,11 @@ function deepMerge<T>(base: T, override: unknown): T {
   return out as T;
 }
 
+/** Public deep-merge of a partial config over a base (same prototype-pollution hardening). For profiles. */
+export function mergeGsdConfig(base: GsdConfig, override: Record<string, unknown>): GsdConfig {
+  return deepMerge(base, override);
+}
+
 /**
  * Read the project's GSD config with defaults applied. Returns `{ config, source }` where source is
  * "file" when `.planning/config.json` was read, "default" when it was absent/unreadable.

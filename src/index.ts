@@ -14,6 +14,7 @@ import { retrieve } from "./retrieval/retrieve.js";
 import { embedAvailable } from "./retrieval/embed.js";
 import { selectPath } from "./orchestrate/select-path.js";
 import { readGsdConfig, bootstrapGsdConfig } from "./engine/config.js";
+import { resolveProfiledConfig, applySurfaceProfile, isSurfaceProfile } from "./engine/profile.js";
 import { enforceToolGate, enforceSpawnPersona, gsdProjectRoot } from "./hooks/enforce-gate.js";
 import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
 import { addPhase, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone } from "./engine/lifecycle.js";
@@ -164,6 +165,7 @@ const retrieveParams = Type.Object(
 /** TypeBox schema for the gsd_settings tool. */
 const settingsParams = Type.Object(
   {
+    profile: Type.Optional(Type.String({ description: "Apply a surface profile for this read: minimal | standard | full." })),
     bootstrap: Type.Optional(
       Type.Boolean({ description: "Write a default GSD config if none exists (never overwrites)." }),
     ),
@@ -404,11 +406,14 @@ const entry = definePluginEntry({
       description:
         "Inspect the project's GSD configuration (workflow toggles, model profile, security/review gates) from .planning/config.json, with GSD defaults applied. Pass {bootstrap:true} to write a default config if none exists.",
       parameters: settingsParams,
-      async execute(_toolCallId: string, args: { bootstrap?: boolean }, _signal?: unknown) {
+      async execute(_toolCallId: string, args: { bootstrap?: boolean; profile?: string }, _signal?: unknown) {
+        const repoRoot = gsdProjectRoot(process.cwd()) ?? process.cwd();
         let created = false;
         if (args?.bootstrap) created = bootstrapGsdConfig(".planning");
-        const { config, source } = readGsdConfig(".planning");
-        return { source, created, model_profile: config.model_profile, workflow: config.workflow, git: config.git };
+        const { config: projectConfig, source } = readGsdConfig(".planning");
+        let config = resolveProfiledConfig(repoRoot, projectConfig);
+        if (args?.profile && isSurfaceProfile(args.profile)) config = applySurfaceProfile(config, args.profile);
+        return { source, created, surface: (config.profiles as { surface?: string }).surface, model_profile: config.model_profile, workflow: config.workflow, git: config.git, review: config.review };
       },
     } as never);
 
