@@ -64,3 +64,23 @@ test("runExecuteWave: empty + dependency cycle handling", async () => {
   const cyclic: ExecUnit[] = [{ planId: "a", worktreeName: "a", dependsOn: ["b"] }, { planId: "b", worktreeName: "b", dependsOn: ["a"] }];
   await assert.rejects(runExecuteWave(cyclic, async (u) => ({ unit: u, status: "merged" })), /cycle/);
 });
+
+test("CR-01: a unit whose dependency did NOT merge is SKIPPED (not run against a missing-dep tree)", async () => {
+  const { runExecuteWave } = await import("../src/orchestrate/parallel-plan.js");
+  const units = [
+    { planId: "A", worktreeName: "wA", dependsOn: [] },
+    { planId: "B", worktreeName: "wB", dependsOn: ["A"] },
+  ];
+  // A "fails" (conflict); B depends on A → B must be skipped+failed, never dispatched
+  let bDispatched = false;
+  const dispatch = async (u: { planId: string }) => {
+    if (u.planId === "A") return { unit: u as never, status: "conflict" as const };
+    bDispatched = true; return { unit: u as never, status: "merged" as const };
+  };
+  const r = await runExecuteWave(units, dispatch, { maxConcurrency: 1 });
+  assert.ok(!bDispatched, "B was NOT dispatched (its dep A failed)");
+  assert.ok(!r.allMerged);
+  const b = r.units.find((x) => x.unit.planId === "B");
+  assert.equal(b!.status, "failed");
+  assert.match(b!.output!, /dependency A did not merge/);
+});

@@ -35,3 +35,20 @@ test("verificationTemplate emits the **Status:** PASSED line verify() keys on", 
   assert.equal(artifactName(3, "plan", 2), "03-02-PLAN.md");
   assert.equal(artifactName(3, "context"), "03-CONTEXT.md");
 });
+
+test("GAPS_FOUND verification HALTS route() (renders the FAIL line, doesn't loop verify)", () => {
+  const d = mkdtempSync(join(tmpdir(), "gsd-gap-"));
+  const p = join(d, ".planning"); const ph = join(p, "phases", "01-x");
+  mkdirSync(ph, { recursive: true });
+  try {
+    writeFileSync(join(p, "ROADMAP.md"), "### Phase 1: X\n**Goal:** g\n");
+    writeFileSync(join(p, "STATE.md"), "---\nstatus: executing\n---\n# State\n");
+    writeFileSync(join(ph, artifactName(1, "context")), contextTemplate(1, "X"));
+    writeFileSync(join(ph, artifactName(1, "plan", 1)), planTemplate(1, 1, {}));
+    writeFileSync(join(ph, artifactName(1, "summary", 1)), summaryTemplate(1, 1, {}));
+    writeFileSync(join(ph, artifactName(1, "verification")), verificationTemplate(1, "GAPS_FOUND"));
+    const r = route(p);
+    assert.equal(r.action, "halt", "GAPS_FOUND halts, doesn't loop verify-work");
+    assert.match(verificationTemplate(1, "GAPS_FOUND"), /\*\*Status:\*\* FAILED \(gaps found\)/);
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});

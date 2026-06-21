@@ -66,11 +66,15 @@ export function verificationTemplate(
   opts: { phaseName?: string; score?: string; findings?: string[] } = {},
 ): string {
   const findings = (opts.findings ?? []).map((f) => `- ${f}`).join("\n");
+  // GAPS_FOUND must HALT the lifecycle (an unresolved gap is not a pass) — route()/verify() only recognize
+  // PASSED and FAIL-grammar. So a gaps verdict renders the `**Status:** FAILED` line the FAIL gate catches,
+  // with the GAPS_FOUND nuance kept in the frontmatter + a marker. Otherwise route() would loop on verify-work.
+  const statusLine = status === "GAPS_FOUND" ? "FAILED" : status;
   return (
     `---\nphase: ${pad(phaseNum)}-${(opts.phaseName ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}\n` +
     `status: ${status.toLowerCase()}\n---\n\n` +
     `# Phase ${phaseNum} Verification\n\n` +
-    `**Status:** ${status}\n` +
+    `**Status:** ${statusLine}${status === "GAPS_FOUND" ? " (gaps found)" : ""}\n` +
     (opts.score ? `**Score:** ${opts.score}\n` : "") +
     (findings ? `\n## Findings\n\n${findings}\n` : "")
   );

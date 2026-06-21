@@ -41,3 +41,27 @@ test("cross-ai: converges when fixes clear the HIGH findings", async () => {
   assert.ok(r.converged);
   assert.equal(r.rounds, 2, "round 1 finds HIGH+fixes, round 2 clean");
 });
+
+test("cross-ai HIGH-02: an errored reviewer is NOT a clean pass (tracked in errored[])", async () => {
+  const { crossAiReview, convergeReview } = await import("../src/orchestrate/cross-ai-review.js");
+  const reviewers = [{ id: "glm" }, { id: "codex" }];
+  // codex throws (ACP down); glm returns clean
+  const dispatch = async (r: { id: string }) => { if (r.id === "codex") throw new Error("ACP down"); return []; };
+  const v = await crossAiReview(reviewers as never, "plan", dispatch as never);
+  assert.deepEqual(v.errored, ["codex"]);
+  assert.equal(v.highCount, 0);
+  // converge must NOT declare success when ALL reviewers errored
+  const allFail = async () => { throw new Error("down"); };
+  const r = await convergeReview(reviewers as never, () => "plan", allFail as never, async () => {}, { maxRounds: 2 });
+  assert.ok(!r.converged, "all-errored is not converged");
+});
+
+test("cross-ai HIGH-01: convergeReview re-reviews AFTER the final fix round (no stale verdict)", async () => {
+  const { convergeReview } = await import("../src/orchestrate/cross-ai-review.js");
+  const reviewers = [{ id: "glm" }];
+  let round = 0;
+  // HIGH every round until the very last fix clears it; the post-loop re-review must see the cleared state
+  const dispatch = async () => (round >= 2 ? [] : [{ reviewer: "glm", severity: "high", text: "bug" }]);
+  const r = await convergeReview(reviewers as never, () => "plan", dispatch as never, async () => { round++; }, { maxRounds: 2 });
+  assert.ok(r.converged, "post-loop re-review reflects the final fix");
+});
