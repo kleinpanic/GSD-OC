@@ -18,6 +18,8 @@ import { enforceToolGate, enforceSpawnPersona, gsdProjectRoot } from "./hooks/en
 import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
 import { addPhase, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone } from "./engine/lifecycle.js";
 import { scaffoldPlanning } from "./engine/scaffold.js";
+import { createAutoRepo, type RepoMode } from "./engine/repo.js";
+import path from "node:path";
 import { validateArtifacts, verifyPhaseCompleteness, validateConsistency, validateHealth, gapCheck } from "./engine/verify.js";
 import { pauseWork, resumeWork, writeThread, listThreads, closeThread, capture } from "./engine/session.js";
 import { addLearning, queryLearnings, pruneLearnings } from "./engine/learnings.js";
@@ -117,6 +119,7 @@ const stateParams = Type.Object(
     done: Type.Optional(Type.Number({ description: "For update-plan-progress: completed plans." })),
     req: Type.Optional(Type.String({ description: "For complete-requirement: the REQ id (e.g. RET-01)." })),
     version: Type.Optional(Type.String({ description: "For complete-milestone: the milestone version (e.g. v1.1)." })),
+    create_repo: Type.Optional(Type.Boolean({ description: "For init: also create a GitHub repo (private by default per config.git.auto_repo) + push the scaffold." })),
   },
   { additionalProperties: false },
 );
@@ -454,7 +457,7 @@ const entry = definePluginEntry({
       description:
         "Advance GSD project state in .planning/STATE.md (op: set-status | record-progress | add-decision | add-blocker). Call this as GSD work completes so the route engine sees live state.",
       parameters: stateParams,
-      async execute(_toolCallId: string, args: { op?: string; status?: string; decision?: string; blocker?: string; total_plans?: number; completed_plans?: number; total_phases?: number; completed_phases?: number; name?: string; goal?: string; phase?: string; plans?: number; done?: number; req?: string; version?: string }, _signal?: unknown) {
+      async execute(_toolCallId: string, args: { op?: string; status?: string; decision?: string; blocker?: string; total_plans?: number; completed_plans?: number; total_phases?: number; completed_phases?: number; name?: string; goal?: string; phase?: string; plans?: number; done?: number; req?: string; version?: string; create_repo?: boolean }, _signal?: unknown) {
         // Best-effort project resolution: walk up from cwd to a .planning root. The tool execute context
         // carries NO workspaceDir (SDK limit), so when cwd isn't the workspace (gateway home) this falls
         // back to cwd-relative .planning. The robust state-advance channel is agent_end (workspaceDir) — SDK-03.
@@ -477,7 +480,13 @@ const entry = definePluginEntry({
             // OCT-W1 write-engine ops (phase/roadmap/milestone/requirements CRUD):
             case "init": {
               fs.mkdirSync(dir, { recursive: true });
-              return { ok: true, op: args.op, ...scaffoldPlanning(dir, { projectName: args.name, description: args.goal }) };
+              const scaffolded = scaffoldPlanning(dir, { projectName: args.name, description: args.goal });
+              let repo;
+              if (args.create_repo) {
+                const mode = ((readGsdConfig(dir).config.git as { auto_repo?: string })?.auto_repo ?? "private") as RepoMode;
+                repo = createAutoRepo(path.dirname(dir), mode, { name: args.name });
+              }
+              return { ok: true, op: args.op, ...scaffolded, ...(repo ? { repo } : {}) };
             }
             case "add-phase": {
               if (!args.name) return { ok: false, error: "add-phase requires a name" };
