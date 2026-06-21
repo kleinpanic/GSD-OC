@@ -15,7 +15,7 @@
           "off"
         ],
         "default": "workspace",
-        "description": "When to auto-engage GSD: workspace (cwd+intent), intent (intent anywhere), off."
+        "description": "When to auto-engage GSD: 'workspace' = coding cwd + coding intent (default); 'intent' = coding intent ANYWHERE (no cwd requirement — for non-fixed-dir setups); 'off' = no auto-engage (gsd_* tools still work)."
       },
       "codingRoots": {
         "type": "array",
@@ -23,27 +23,27 @@
           "type": "string"
         },
         "default": [],
-        "description": "Extra coding-workspace dirs (~ and $VAR ok); multiple allowed."
+        "description": "Extra directories to treat as coding workspaces (in addition to project markers). Supports ~ and $VAR. Use this for code dirs that aren't named codeWS or live elsewhere; multiple dirs allowed."
       },
       "includeDefaultRoot": {
         "type": "boolean",
         "default": true,
-        "description": "Include the built-in $HOME/codeWS default root."
+        "description": "Include the built-in $HOME/codeWS default root. Set false to rely only on codingRoots + project markers (.git/package.json/etc)."
       },
       "workerAgent": {
         "type": "string",
         "default": "dev",
-        "description": "Allowlisted base agent hosting GSD personas when driving."
+        "description": "Allowlisted base agent that hosts GSD subagent personas when the orchestrator drives."
       },
       "autoEngage": {
         "type": "boolean",
         "default": true,
-        "description": "Master switch for auto-engage."
+        "description": "Master switch for auto-engage. false (or engageMode 'off') disables prompt-injection engagement."
       },
       "disabled": {
         "type": "boolean",
         "default": false,
-        "description": "Disable engagement entirely."
+        "description": "Disable GSD-OC engagement entirely (equivalent to engageMode 'off')."
       }
     }
   },
@@ -55,12 +55,12 @@
       "gsd_orchestrate",
       "gsd_retrieve",
       "gsd_settings",
-      "gsd_state",
-      "gsd_workstream",
-      "gsd_verify",
-      "gsd_session",
-      "gsd_learnings",
       "gsd_command",
+      "gsd_learnings",
+      "gsd_session",
+      "gsd_verify",
+      "gsd_workstream",
+      "gsd_state",
       "gsd_workflow",
       "gsd_project",
       "gsd_quality",
