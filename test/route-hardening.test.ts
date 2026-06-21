@@ -88,3 +88,27 @@ test("M-2: a bare 'PASS'/'# PASSED' heading is NOT a verification verdict (no pr
     assert.equal(route(real.planning).action, "complete-milestone");
   } finally { rmSync(real.root, { recursive: true, force: true }); }
 });
+
+test("R7-HIGH: a bold-markdown '**Status:** PASSED' verdict IS recognized (route advances)", () => {
+  function single(verif: string) {
+    const root = mkdtempSync(join(tmpdir(), "gsd-r7-"));
+    const planning = join(root, ".planning");
+    const pd = join(planning, "phases", "01-a");
+    mkdirSync(pd, { recursive: true });
+    writeFileSync(join(planning, "ROADMAP.md"), "### Phase 1: A\n**Goal:** g\n");
+    writeFileSync(join(pd, "01-01-PLAN.md"), "# plan\n");
+    writeFileSync(join(pd, "01-01-SUMMARY.md"), "# summary\n");
+    writeFileSync(join(pd, "1-VERIFICATION.md"), verif);
+    return { root, planning };
+  }
+  // bold-only verdict, NO frontmatter status line — must still be recognized as passed
+  const bold = single("# Verification\n\n**Status:** PASSED\n");
+  try {
+    assert.equal(route(bold.planning).action, "complete-milestone", "bold PASS must advance");
+  } finally { rmSync(bold.root, { recursive: true, force: true }); }
+  // M-2 not regressed: a bare PASS heading still does NOT complete
+  const bare = single("# PASSED\n\nnotes\n");
+  try {
+    assert.notEqual(route(bare.planning).action, "complete-milestone");
+  } finally { rmSync(bare.root, { recursive: true, force: true }); }
+});
