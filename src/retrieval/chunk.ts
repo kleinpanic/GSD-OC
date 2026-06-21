@@ -42,11 +42,12 @@ function sections(text: string, fallbackHeading: string): Section[] {
 
 /** Hard-split an oversized string on a whitespace boundary into <= maxChars pieces. */
 function hardSplit(s: string, maxChars: number): string[] {
+  const limit = Math.max(1, maxChars); // #5: guard maxChars<1 — cut would stay 0, slice(0,0)="" → infinite loop
   const pieces: string[] = [];
   let rest = s;
-  while (rest.length > maxChars) {
-    let cut = rest.lastIndexOf(" ", maxChars);
-    if (cut <= 0) cut = maxChars; // no whitespace boundary — slice hard
+  while (rest.length > limit) {
+    let cut = rest.lastIndexOf(" ", limit);
+    if (cut <= 0) cut = limit; // no whitespace boundary — slice hard
     pieces.push(rest.slice(0, cut).trim());
     rest = rest.slice(cut).trim();
   }

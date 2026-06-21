@@ -62,36 +62,59 @@ export function mergeGsdSection(existing: string | null): string {
   if (!existing || existing.trim() === "") {
     return `# AGENTS.md\n\n${section}\n`;
   }
-  const begin = existing.indexOf(GSD_BEGIN);
-  if (begin !== -1) {
-    const end = existing.indexOf(GSD_END, begin);
-    if (end !== -1) {
-      // Refresh the existing managed block in place (preserve its current position).
-      const before = existing.slice(0, begin);
-      const after = existing.slice(end + GSD_END.length);
-      return `${before}${section}${after}`;
-    }
-    // M-1: corrupt block — GSD_BEGIN present but GSD_END missing (manual edit / a tool that stripped the HTML
-    // comment / a truncated write). Do NOT treat begin→EOF as ours — the managed block is not guaranteed to be
-    // last, so user content can sit below it. Re-cap the block at the begin LINE and PRESERVE everything after
-    // that line. Idempotency holds: the next run sees a well-formed begin/end pair. (Old code sliced to EOF and
-    // silently deleted all user content below a corrupt block.)
-    const before = existing.slice(0, begin);
-    const lineEnd = existing.indexOf("\n", begin);
-    const tail = lineEnd === -1 ? "" : existing.slice(lineEnd + 1);
-    return tail ? `${before}${section}\n${tail}` : `${before}${section}`;
-  }
-  // Prepend the section so it leads the file. If the file opens with a `# AGENTS.md` title line,
-  // keep that title first and insert the block immediately after it; otherwise put the block at
-  // the very top, then the existing content.
-  const titleMatch = existing.match(/^(# [^\n]*\n)/);
+  // Strip EVERY existing managed block (idempotency #2 — there may be more than one from an earlier buggy run),
+  // but ONLY markers that are NOT inside a user's code fence (#1 — a fenced example of the GSD block must not be
+  // treated as a real managed block and have the user's content between the markers deleted).
+  const stripped = stripManagedBlocks(existing);
+  // Prepend the fresh section so it leads the file. Keep a leading `# AGENTS.md` title first if present.
+  const titleMatch = stripped.match(/^(# [^\n]*\r?\n)/);
   if (titleMatch) {
     const title = titleMatch[1];
-    const rest = existing.slice(title.length);
-    const restSep = rest.startsWith("\n") ? "" : "\n";
-    return `${title}\n${section}\n${restSep}${rest}`;
+    const rest = stripped.slice(title.length).replace(/^\s*\n/, "");
+    return `${title}\n${section}\n\n${rest}`;
   }
-  return `${section}\n\n${existing}`;
+  return `${section}\n\n${stripped.replace(/^\s*\n/, "")}`;
+}
+
+/** Remove every GSD managed block (GSD_BEGIN…GSD_END) whose markers sit OUTSIDE a code fence. Fence-aware so a
+ *  user's fenced EXAMPLE of the block is preserved verbatim. A GSD_BEGIN with no matching non-fenced GSD_END is
+ *  dropped from the begin LINE to EOL only (re-cap), preserving the tail (M-1 — never delete user content below). */
+function stripManagedBlocks(text: string): string {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  let inFence = false;
+  let i = 0;
+  while (i < lines.length) {
+    const t = lines[i].trim();
+    if (t.startsWith("```") || t.startsWith("~~~")) {
+      inFence = !inFence;
+      out.push(lines[i]);
+      i++;
+      continue;
+    }
+    if (!inFence && lines[i].includes(GSD_BEGIN)) {
+      // find the matching GSD_END that is also outside a fence
+      let j = i + 1;
+      let fence2 = false;
+      while (j < lines.length) {
+        const tj = lines[j].trim();
+        if (tj.startsWith("```") || tj.startsWith("~~~")) fence2 = !fence2;
+        else if (!fence2 && lines[j].includes(GSD_END)) break;
+        j++;
+      }
+      if (j < lines.length) {
+        i = j + 1; // matched END → drop the whole managed block [begin..end]
+      } else {
+        // M-1: BEGIN with no matching END (truncated/edited) — drop ONLY the begin marker line and preserve the
+        // tail as user content (never delete everything below a corrupt block). The fresh section is re-prepended.
+        i = i + 1;
+      }
+      continue;
+    }
+    out.push(lines[i]);
+    i++;
+  }
+  return out.join("\n");
 }
 
 /**
