@@ -28,3 +28,17 @@ test("parseCheckpointReply maps number / id / label / partial", () => {
   assert.equal(parseCheckpointReply(g, "huh?"), null);
   assert.equal(parseCheckpointReply(g, ""), null);
 });
+
+test("renderCheckpointDiscord: action-row buttons with routable custom_ids", async () => {
+  const { renderCheckpointDiscord } = await import("../src/engine/checkpoint.js");
+  const g = buildCheckpoint("human-verify", "Tests pass?", { discord: true });
+  const d = renderCheckpointDiscord(g);
+  assert.equal(d.content, "Tests pass?");
+  assert.equal(d.components[0].type, 1);
+  assert.deepEqual(d.components[0].components.map((b) => b.custom_id), ["gsd:human-verify:pass", "gsd:human-verify:fail"]);
+  assert.equal(d.components[0].components[0].style, 3, "pass = success-green");
+  // ≤5 buttons per row: 7 options → 2 rows
+  const many = renderCheckpointDiscord(buildCheckpoint("decision", "pick", { options: Array.from({ length: 7 }, (_, i) => ({ id: `o${i}`, label: `O${i}` })) }));
+  assert.equal(many.components.length, 2);
+  assert.equal(many.components[0].components.length, 5);
+});

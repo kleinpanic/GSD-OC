@@ -28,7 +28,7 @@ import path from "node:path";
 import { validateArtifacts, verifyPhaseCompleteness, validateConsistency, validateHealth, gapCheck } from "./engine/verify.js";
 import { scanUat, auditOpen } from "./engine/audit.js";
 import { pauseWork, resumeWork, writeThread, listThreads, closeThread, capture } from "./engine/session.js";
-import { buildCheckpoint, type CheckpointType, type GateOption } from "./engine/checkpoint.js";
+import { buildCheckpoint, renderCheckpointDiscord, type CheckpointType, type GateOption } from "./engine/checkpoint.js";
 import { addLearning, queryLearnings, pruneLearnings } from "./engine/learnings.js";
 import { scanInjection } from "./engine/security.js";
 import { suggestFlags } from "./orchestrate/flags.js";
@@ -657,7 +657,9 @@ const entry = definePluginEntry({
               if (!args.text) return { ok: false, error: "checkpoint requires text (the prompt)" };
               const discord = !!(readGsdConfig(dir).config.discord_gates);
               const options = Array.isArray(args.options) ? (args.options as GateOption[]) : undefined;
-              return { ok: true, gate: buildCheckpoint(((args.type as CheckpointType) || "decision"), args.text, { options, discord }) };
+              const gate = buildCheckpoint(((args.type as CheckpointType) || "decision"), args.text, { options, discord });
+              // When discord_gates is on, also hand the agent the exact Discord component payload to send.
+              return { ok: true, gate, ...(discord ? { discord: renderCheckpointDiscord(gate) } : {}) };
             }
             default: return { ok: false, error: "unknown op: " + args?.op };
           }
