@@ -98,7 +98,7 @@ Per-project opt-out: a `.gsd-off` file, `pluginConfig`, or `workflow.enforce_too
 
 Milestone **M1 (Retrieval Core)** complete, with the finite-path orchestrator + enforcement layer built.
 Hardened through **9 rounds of adversarial multi-agent code review** to convergence — see
-[.planning/REVIEW-LOG.md](.planning/REVIEW-LOG.md). The plugin dogfoods GSD on itself: its own
+[docs/REVIEW-LOG.md](docs/REVIEW-LOG.md). The plugin dogfoods GSD on itself: its own
 `.planning/` directory is the GSD working history.
 
 ## Constraints (by design)
