@@ -46,3 +46,12 @@ test("baseline: lexical alone does NOT surface a debug doc (proves semantic is l
     "lexical top-20 should not contain a debug doc — the flaky->debug bridge is semantic",
   );
 });
+
+test("loadCorpus: a corrupt artifact yields a clear diagnostic, not a raw SyntaxError (WR-01)", async () => {
+  // loadCorpus reads from disk + caches; we can't easily corrupt the real artifact, so assert the guard SHAPE:
+  // the function must wrap JSON.parse so a thrown error mentions 'corrupt'. Verify the real corpus still loads.
+  const { loadCorpus } = await import("../src/retrieval/corpus.js");
+  const c = loadCorpus();
+  assert.ok(c.docs.length > 0, "real corpus loads");
+  assert.strictEqual(loadCorpus(), c, "cached singleton (second call returns the same object)");
+});

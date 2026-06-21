@@ -9,7 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { assertWithinRoot } from "./security.js";
 
-const PHASE_RE = /^#{2,4}\s*Phase\s+(\d+(?:\.\d+)*)\s*:\s*(.+)$/gim;
+const PHASE_RE = /^#{2,4}[ \t]*Phase[ \t]+(\d+(?:\.\d+)*)[ \t]*:[ \t]*([^\n]*)$/gim;
 
 function roadmapPath(planningDir: string): string {
   return path.join(planningDir, "ROADMAP.md");

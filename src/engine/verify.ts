@@ -24,7 +24,7 @@ function read(planningDir: string, file: string): string | null {
   }
 }
 
-const PHASE_RE = /^#{2,4}\s*Phase\s+(\d+(?:\.\d+)*)\s*:\s*(.+)$/gim;
+const PHASE_RE = /^#{2,4}[ \t]*Phase[ \t]+(\d+(?:\.\d+)*)[ \t]*:[ \t]*([^\n]*)$/gim;
 
 /** Parse `### Phase N: name` from ROADMAP (mirrors route.ts:parseRoadmapPhases so "valid" ≡ "routable"). */
 export function roadmapPhases(planningDir: string): { number: string; name: string }[] {

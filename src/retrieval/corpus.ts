@@ -39,6 +39,19 @@ function corpusPath(): string {
 
 export function loadCorpus(): GsdCorpus {
   if (cached) return cached;
-  cached = JSON.parse(readFileSync(corpusPath(), "utf8")) as GsdCorpus;
+  const p = corpusPath();
+  let raw: string;
+  try {
+    raw = readFileSync(p, "utf8");
+  } catch {
+    throw new Error(`loadCorpus: corpus artifact unreadable at ${p} — ensure the build bundled corpus.generated.json`);
+  }
+  try {
+    // WR-01: guard the parse so a corrupt/truncated artifact surfaces a clear "corpus corrupt" diagnostic
+    // instead of a raw SyntaxError (mirrors readGsdConfig's guarded parse).
+    cached = JSON.parse(raw) as GsdCorpus;
+  } catch (e) {
+    throw new Error(`loadCorpus: corpus.generated.json is corrupt (${e instanceof Error ? e.message : String(e)})`);
+  }
   return cached;
 }

@@ -36,7 +36,7 @@ function parseRoadmapPhases(planningDir: string): RoadmapPhase[] {
   }
   const phases: RoadmapPhase[] = [];
   // `### Phase N:` / `## Phase N.1:` etc. — capture the phase number and name.
-  const re = /^#{2,4}\s*Phase\s+(\d+(?:\.\d+)*)\s*:\s*(.+)$/gim;
+  const re = /^#{2,4}[ \t]*Phase[ \t]+(\d+(?:\.\d+)*)[ \t]*:[ \t]*([^\n]*)$/gim;
   let m: RegExpExecArray | null;
   while ((m = re.exec(content)) !== null) {
     phases.push({ number: m[1], name: m[2].trim() });
@@ -68,11 +68,12 @@ function readStatus(planningDir: string): string | null {
   // Body `## Current Position` Status overrides frontmatter (read-state.ts:73-90).
   const section = /##\s*Current Position\s*\n([\s\S]*?)(?=\n##|$)/i.exec(raw);
   if (section) {
-    const body = section[1];
-    const bold = /\*\*Status:\*\*[ \t]*(.+)/i.exec(body);
-    const plain = /^Status:[ \t]*(.+)$/im.exec(body);
-    const bodyStatus = bold ? bold[1] : plain ? plain[1] : null;
-    if (bodyStatus) status = stripQuotes(bodyStatus);
+    // Finding 2: strip bold FIRST so every markdown variant is caught — `**Status:**`, `**Status**:` (colon
+    // outside the bold), and plain `Status:` all normalize to `Status: <v>`. Without this, `**Status**: failed`
+    // matched neither old regex and the error/failed hard-stop gate was silently bypassed.
+    const body = section[1].replace(/\*\*/g, "");
+    const plain = /^[ \t]*Status:[ \t]*(.+)$/im.exec(body);
+    if (plain) status = stripQuotes(plain[1]);
   }
   return status;
 }

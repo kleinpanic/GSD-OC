@@ -137,3 +137,28 @@ test("R8-HIGH: a bold-field '**Status:** FAILED' verdict HALTS (and a conflictin
     assert.notEqual(route(conflict.planning).action, "complete-milestone", "an unresolved FAIL must block the ship");
   } finally { rmSync(conflict.root, { recursive: true, force: true }); }
 });
+
+test("BLOCKER: an empty-named phase heading does NOT swallow the next phase (regex line-anchored)", async () => {
+  const { roadmapPhases } = await import("../src/engine/verify.js");
+  const d = mkdtempSync(join(tmpdir(), "gsd-emptyname-"));
+  const p = join(d, ".planning"); mkdirSync(p, { recursive: true });
+  try {
+    // Phase 2 has NO name after the colon — must not eat Phase 3
+    writeFileSync(join(p, "ROADMAP.md"), "### Phase 1: First\n### Phase 2:\n### Phase 3: Third\n");
+    const phases = roadmapPhases(p);
+    assert.deepEqual(phases.map((x: { number: string }) => x.number), ["1", "2", "3"], "all 3 phases parsed, none dropped");
+    assert.equal(phases[1].name, "", "empty name stays empty (didn't swallow Phase 3's heading)");
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+test("Finding 2: **Status**: failed (colon outside bold) triggers the error hard-stop", () => {
+  const d = mkdtempSync(join(tmpdir(), "gsd-status-"));
+  const p = join(d, ".planning"); mkdirSync(join(p, "phases", "01-x"), { recursive: true });
+  try {
+    writeFileSync(join(p, "ROADMAP.md"), "### Phase 1: X\n**Goal:** g\n");
+    // colon OUTSIDE the bold markers — the variant that used to evade the gate
+    writeFileSync(join(p, "STATE.md"), "---\nstatus: executing\n---\n## Current Position\n\n**Status**: failed\n");
+    const r = route(p);
+    assert.equal(r.action, "halt", "error/failed status now halts (gate no longer bypassed)");
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
