@@ -32,6 +32,7 @@ import { validateArtifacts, verifyPhaseCompleteness, validateConsistency, valida
 import { scanUat, auditOpen } from "./engine/audit.js";
 import { projectStats } from "./engine/stats.js";
 import { codebaseDrift } from "./engine/drift.js";
+import { graphifyQuery, graphifyStatus, graphifyDiff } from "./engine/graphify.js";
 import { pauseWork, resumeWork, writeThread, listThreads, closeThread, capture } from "./engine/session.js";
 import { buildCheckpoint, renderCheckpointDiscord, parseCheckpointReply, type CheckpointType, type GateOption } from "./engine/checkpoint.js";
 import { addLearning, queryLearnings, pruneLearnings } from "./engine/learnings.js";
@@ -89,8 +90,10 @@ const sessionParams = Type.Object(
 /** TypeBox schema for gsd_verify — native integrity checks (validate-artifacts gate + verify/validate verbs). */
 const verifyParams = Type.Object(
   {
-    op: Type.Union([Type.Literal("validate-artifacts"), Type.Literal("phase-completeness"), Type.Literal("consistency"), Type.Literal("gap"), Type.Literal("uat"), Type.Literal("audit-open"), Type.Literal("stats"), Type.Literal("codebase-drift"), Type.Literal("health")], { description: "validate-artifacts | phase-completeness | consistency | gap | uat | audit-open | stats | codebase-drift | health" }),
+    op: Type.Union([Type.Literal("validate-artifacts"), Type.Literal("phase-completeness"), Type.Literal("consistency"), Type.Literal("gap"), Type.Literal("uat"), Type.Literal("audit-open"), Type.Literal("stats"), Type.Literal("codebase-drift"), Type.Literal("graphify-query"), Type.Literal("graphify-status"), Type.Literal("graphify-diff"), Type.Literal("health")], { description: "validate-artifacts | phase-completeness | consistency | gap | uat | audit-open | stats | codebase-drift | graphify-query | graphify-status | graphify-diff | health" }),
     phase: Type.Optional(Type.String({ description: "Phase number (for phase-completeness)." })),
+    term: Type.Optional(Type.String({ description: "Search term (for graphify-query)." })),
+    budget: Type.Optional(Type.Number({ description: "Optional token budget cap (for graphify-query)." })),
   },
   { additionalProperties: false },
 );
@@ -676,7 +679,7 @@ const entry = definePluginEntry({
       description:
         "Run native GSD integrity checks (op: validate-artifacts | phase-completeness | consistency | health). Returns {ok, defects[]} — validate-artifacts is the write-guarantee gate (an artifact is valid iff route() can drive it).",
       parameters: verifyParams,
-      async execute(_toolCallId: string, args: { op?: string; phase?: string }, _signal?: unknown) {
+      async execute(_toolCallId: string, args: { op?: string; phase?: string; term?: string; budget?: number }, _signal?: unknown) {
         const root = gsdProjectRoot(process.cwd());
         const base = root ? `${root}/.planning` : ".planning";
         const dir = resolveWorkstreamDir(base);
@@ -695,6 +698,11 @@ const entry = definePluginEntry({
               const w = (readGsdConfig(base).config.workflow ?? {}) as { drift_threshold?: number; drift_action?: string };
               return { ok: true, ...codebaseDrift(root ?? process.cwd(), { threshold: w.drift_threshold, action: w.drift_action === "auto-remap" ? "auto-remap" : "warn" }) };
             }
+            case "graphify-query":
+              if (!args.term) return { ok: false, error: "graphify-query requires term" };
+              return { ok: true, ...graphifyQuery(dir, args.term, { budget: args.budget ?? null }) };
+            case "graphify-status": return { ok: true, ...graphifyStatus(dir) };
+            case "graphify-diff": return { ok: true, ...graphifyDiff(dir) };
             case "health": return validateHealth(dir);
             default: return { ok: false, error: `unknown op: ${args?.op}` };
           }
