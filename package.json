@@ -25,7 +25,8 @@
     "sync:upstream": "node --experimental-strip-types scripts/sync-upstream.ts --sync",
     "test": "tsc -p tsconfig.test.json && node --test \"dist-test/test/*.test.js\"",
     "health": "tsc && node scripts/copy-artifacts.mjs && node --experimental-strip-types scripts/health.ts",
-    "health:strict": "node --experimental-strip-types scripts/health.ts --strict"
+    "health:strict": "node --experimental-strip-types scripts/health.ts --strict",
+    "bench": "tsc && node --experimental-strip-types scripts/bench.ts"
   },
   "dependencies": {
     "@lancedb/lancedb": "^0.30.0",
