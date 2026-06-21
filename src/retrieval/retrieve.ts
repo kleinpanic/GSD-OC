@@ -102,13 +102,14 @@ export async function retrieve(query: string, opts: RetrieveOptions = {}): Promi
   const perMod = Math.max(1, Math.min(Math.trunc(opts.perModality ?? 50) || 50, 200));
   const { corpus, bm, tg } = lexical();
   const lists: ScoredChunk[][] = [bm25Search(bm, q, perMod), trigramSearch(tg, q, perMod)];
-  const sem = opts.semantic === undefined ? await defaultSemantic({ env: opts.env }) : opts.semantic;
-  if (sem) {
-    try {
-      lists.push(await sem(q, perMod));
-    } catch {
-      /* graceful degradation */
-    }
+  // BLOCKER #1: the WHOLE semantic path must degrade gracefully — defaultSemantic() loads the vector cache, whose
+  // JSON.parse can THROW on a corrupt/truncated artifact. That throw was OUTSIDE the try, so retrieve() hard-failed
+  // (returning zero results) instead of falling back to lexical+trigram — violating the "never hard-fails" contract.
+  try {
+    const sem = opts.semantic === undefined ? await defaultSemantic({ env: opts.env }) : opts.semantic;
+    if (sem) lists.push(await sem(q, perMod));
+  } catch {
+    /* graceful degradation — lexical + trigram still rank */
   }
   const weights = opts.weights ?? (lists.length === 3 ? [1, 1, SEMANTIC_WEIGHT] : lists.map(() => 1));
   // Track which modality(ies) surfaced each chunk so results carry source provenance (RET-07 criterion 2).

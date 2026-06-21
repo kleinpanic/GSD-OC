@@ -135,7 +135,14 @@ export function vectorArtifactPaths(forWrite = false): { bin: string; index: str
 /** Load the normalized vector matrix from the bundled (runtime) artifact, or null if not built yet. */
 export function loadVectorCache(paths: { bin: string; index: string } = vectorArtifactPaths(false)): VectorCache | null {
   if (!existsSync(paths.bin) || !existsSync(paths.index)) return null;
-  const idx = JSON.parse(readFileSync(paths.index, "utf8")) as { dim: number; chunkIds: string[] };
+  // BLOCKER #1 (defense-in-depth): guard the parse — a corrupt/truncated index.json must return null (degrade),
+  // not throw a SyntaxError up through retrieve(). Mirrors loadCorpus's guarded parse + the MED-01 binary guards.
+  let idx: { dim: number; chunkIds: string[] };
+  try {
+    idx = JSON.parse(readFileSync(paths.index, "utf8")) as { dim: number; chunkIds: string[] };
+  } catch {
+    return null;
+  }
   const buf = readFileSync(paths.bin);
   // MED-01: a truncated/corrupt .bin must return null, not crash. new Float32Array throws on a byteLength
   // not divisible by 4; guard that, and reject a degenerate (dim<=0 / non-array) index that would otherwise

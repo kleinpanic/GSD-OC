@@ -28,6 +28,10 @@ export const MECHANICAL_ACTIONS: ReadonlySet<string> = new Set([
 const ACTION_AGENT: Record<string, string> = {
   "discuss-phase": "gsd-planner",
   "verify-work": "gsd-verifier",
+  // INTENTIONAL difference from autonomous.ts's ACTION_TO_AGENT (which maps plan-phase → gsd-planner): the
+  // gate/finalize path here does RESEARCH-FIRST — plan-phase fans out the researcher across RESEARCH_LANES (ORCH-03,
+  // the research-before-plan pattern), then the planner runs in the next step. autonomous.ts dispatches one agent per
+  // action so it maps straight to the planner. Both are correct for their context; not an inconsistency to fix.
   "plan-phase": "gsd-project-researcher",
   "execute-phase": "gsd-executor",
   "resume-work": "gsd-executor",

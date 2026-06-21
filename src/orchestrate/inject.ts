@@ -37,8 +37,19 @@ function idempotencyKeyFor(next: RouteResult): string {
   return `gsd:${next.phase ?? "_"}:${next.action}`;
 }
 
+/** Terminal actions carry no next-turn instruction (the lifecycle has stopped). */
+const TERMINAL_ACTIONS: ReadonlySet<string> = new Set(["halt", "complete-milestone"]);
+
 /** Build bounded next-turn instruction text for a route() result. */
 export function instructionFor(next: RouteResult): string {
+  // #5 guard: a terminal action ("halt"/"complete-milestone") is NOT a step to advance to — emit a stop notice,
+  // never "[GSD advance] Proceed to the halt step" (self-contradicting). The live caller never reaches here for a
+  // terminal action, but instructionFor is exported, so guard it so a future/test caller can't inject nonsense.
+  if (TERMINAL_ACTIONS.has(next.action)) {
+    return next.action === "complete-milestone"
+      ? "[GSD] The milestone is complete — no further lifecycle step. Run completion/ship if not already done."
+      : `[GSD] Halted${next.reason ? ` (${next.reason})` : ""} — resolve the blocker before continuing.`;
+  }
   if (GATE_ACTIONS.has(next.action)) {
     return buildSpawnInstruction(agentForGate(next.action), next.phase);
   }
