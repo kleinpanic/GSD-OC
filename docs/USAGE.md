@@ -95,7 +95,7 @@ The plugin **never mutates the host config** — it only reads it (`src/index.ts
 1. **Install / link the repo** (does not write host config):
 
    ```bash
-   openclaw plugins install --link ~/codeWS/JavaScript/GSD-OC
+   openclaw plugins install --link "$(pwd)"
    ```
 
 2. **Register + enable** the plugin in the host config (`plugins.allow`,

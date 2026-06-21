@@ -61,7 +61,10 @@ function buildDocs(srcs: Source[]): GsdDoc[] {
       const text = adaptGsdText(raw);
       const rel = relative(src.root, path).replace(extname(path), "");
       const id = `${src.kind}:${rel}`;
-      docs.push({ id, kind: src.kind, path, title: titleOf(text, basename(path)), text, sha256: sha256(text) });
+      // Store a GENERIC provenance path (kind-relative) — NEVER the absolute build path, which would bake the
+      // builder's $HOME/username into the shipped (public) corpus artifact.
+      const provenance = `${src.kind}/${relative(src.root, path)}`;
+      docs.push({ id, kind: src.kind, path: provenance, title: titleOf(text, basename(path)), text, sha256: sha256(text) });
     }
   }
   return docs;
@@ -71,7 +74,8 @@ export function generateCorpus(): GsdCorpus {
   const srcs = sources();
   const docs = buildDocs(srcs);
   const chunks = docs.flatMap((d) => chunkDoc(d));
-  const roots = srcs.map((s) => s.root);
+  // Genericize the manifest's source roots to `<kind>` labels — never ship the absolute install path.
+  const roots = srcs.map((s) => `<gsd-install>/${s.kind}`);
   const manifest = buildManifest(docs, chunks, roots);
   return { docs, chunks, manifest };
 }
