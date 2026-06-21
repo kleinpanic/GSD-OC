@@ -25,6 +25,7 @@ export const VERB_TO_SUBAGENT: Record<string, string> = {
   ui: "gsd-ui-researcher",
   "ai-integration": "gsd-eval-planner",
   docs: "gsd-doc-writer",
+  integration: "gsd-integration-checker",
 };
 
 /**

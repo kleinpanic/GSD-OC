@@ -20,6 +20,7 @@ export const FLAG_RULES: FlagRule[] = [
   { re: /\b(forensic\w*|deep\w*|thorough\w*|rigorous\w*|integrity|6-?check|exhaustive)\b/i, flag: "--forensic" },
   { re: /\b(auto(nomous(ly)?|matic(ally)?)?|no gate|skip (the )?gates?|don'?t (stop|ask)|hands?-?off)\b/i, flag: "--auto" },
   { re: /\b(cross-?ai|peer review|re-?plan(ning)?|another (ai|model) review)\b/i, flag: "--reviews" },
+  { re: /\b(fix|auto-?fix|apply (the )?fixes|remediat\w*)\b/i, flag: "--fix", commands: ["code-review", "audit-fix"] },
 ];
 
 /** Extract `--from N` / `--to M` when the intent names a phase range ("from phase 2 to 5", "phases 3-7"). */

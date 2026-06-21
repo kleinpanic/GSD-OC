@@ -73,13 +73,14 @@ const CONSENSUS_MIN = 2;
 const CONDITIONAL: { intent: RegExp; doc: RegExp; stage: Stage }[] = [
   { intent: /\b(spike|prototype|poc|proof of concept|experiment|risky|de-?risk|unknown approach|explore)\b/, doc: /^workflow:spike/, stage: { verb: "spike", skill: "gsd-spike", pos: 25, reason: "risky/unknown approach — spike first" } },
   { intent: /\b(ui|frontend|front-end|react|vue|svelte|component|css|layout|dashboard|screen|page|mockup|sketch|design|button|form|modal)\b/, doc: /^workflow:(ui-phase|ui-review|sketch)/, stage: { verb: "ui", skill: "gsd-ui-phase", pos: 30, gate: true, reason: "frontend work — UI design contract" } },
-  { intent: /\b(ai|a\.i\.|llm|agent|embedding|eval\w*|model|gpt|chatbot|rag|prompt|inference|fine-?tune)\b/, doc: /^workflow:(ai-integration|eval-review|select-framework)/, stage: { verb: "ai-integration", skill: "gsd-ai-integration-phase", pos: 35, gate: true, reason: "AI system — spec + eval strategy" } },
+  { intent: /\b(ai|a\.i\.|llm|agent|embedding\w*|eval\w*|model|gpt|chatbot|rag|prompt|inference|fine-?tune|spark|dgx|nim|gpu|cuda|h100|a100)\b/, doc: /^workflow:(ai-integration|eval-review)/, stage: { verb: "ai-integration", skill: "gsd-ai-integration-phase", pos: 35, gate: true, reason: "AI/ML system (incl. spark/DGX) — spec + eval strategy" } },
+  { intent: /\b(integrat\w*|end-to-end|e2e|cross-phase|wire up|connect (the )?phases?)\b/, doc: /^workflow:(verify-phase|integration)/, stage: { verb: "integration", skill: "gsd-integration-checker", pos: 82, reason: "cross-phase/E2E — integration check" } },
   { intent: /\b(bug|debug\w*|flaky|fail\w*|broken|crash\w*|error|reproduce|intermittent|stack ?trace|regression)\b/, doc: /^workflow:debug/, stage: { verb: "debug", skill: "gsd-debug", pos: 55, reason: "bug/failure intent — systematic debug" } },
   // BL-01: cover embedded-auth + credential vocabulary. `\bauth\w*\b` misses "OAuth" (no boundary before
   // "auth") and "password reset" etc. Added oauth/jwt/login/password/credential/sso/saml/rbac/encrypt — the
   // clearly-security terms; deliberately NOT the generic session/token/permission (too many false positives).
   { intent: /\b(secur\w*|vulnerab\w*|threat\w*|exploit\w*|csrf|xss|inject\w*|mitigat\w*|pentest|owasp|cve|auth\w*|oauth|jwt|login|logout|password|credential\w*|sso|saml|rbac|encrypt\w*|decrypt\w*)\b/, doc: /^workflow:secure/, stage: { verb: "secure", skill: "gsd-secure-phase", pos: 65, reason: "security-sensitive — threat model" } },
-  { intent: /\b(graph\w*|knowledge graph)\b/, doc: /^workflow:graphify/, stage: { verb: "graphify", skill: "gsd-graphify", pos: 85, reason: "knowledge-graph request" } },
+  { intent: /\b(graph\w*|knowledge graph)\b/, doc: /^(workflow|reference):graphify/ /* keyword-carried; no top-level workflow:graphify exists */, stage: { verb: "graphify", skill: "gsd-graphify", pos: 85, reason: "knowledge-graph request" } },
   { intent: /\b(document\w*|readme|changelog|api docs|docstring)\b/, doc: /^workflow:docs-update/, stage: { verb: "docs", skill: "gsd-docs-update", pos: 88, reason: "documentation request — write/verify docs" } },
 ];
 
