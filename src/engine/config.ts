@@ -33,14 +33,25 @@ export interface GsdConfig {
 export function defaultGsdConfig(): GsdConfig {
   return {
     model_profile: "balanced",
+    model_profile_overrides: {}, // per-agent model overrides (resolveModel honors these)
+    effort: { default: "high" }, // OpenClaw model effort tier
     commit_docs: true,
     parallelization: true,
+    phase_naming: "sequential",
+    planning: { search_gitignored: false, granularity: "standard" },
     git: {
       branching_strategy: "none",
       create_tag: true,
+      base_branch: null,
       phase_branch_template: "gsd/phase-{phase}-{slug}",
       milestone_branch_template: "gsd/{milestone}-{slug}",
+      auto_repo: "private", // OCT-3: default-on PRIVATE GitHub repo at init ("private"|"public"|"off")
+      auto_repo_owner: null,
     },
+    ship: { pr_body_sections: [] },
+    // OpenClaw-applicable replacements for dropped Claude-Code keys (statusline/text_mode/cross-AI-host CLIs):
+    review: { external: [], cross_ai_plan_review: false }, // external reviewers = coderabbit|codex|gemini agent types
+    discord_gates: false, // decision gates as Discord interactive components (replaces Claude TUI mode)
     workflow: {
       research: true,
       plan_check: true,
@@ -49,12 +60,19 @@ export function defaultGsdConfig(): GsdConfig {
       code_review_depth: "standard",
       security_enforcement: true,
       security_asvs_level: 1,
+      security_block_on: "high",
       plan_bounce: false, // upstream CONFIG_DEFAULTS default is false
       plan_bounce_passes: 2,
       auto_advance: false, // upstream CONFIG_DEFAULTS default is false
       pattern_mapper: true,
+      nyquist_validation: true,
+      skip_discuss: false,
+      max_discuss_passes: 3,
+      subagent_timeout: 300000, // OpenClaw subagent dispatch timeout (ms)
+      enforce_tool_gate: true, // the before_tool_call edit gate (per-project override)
       ui_phase: true,
       ui_safety_gate: true,
+      ui_review: false,
       ai_integration_phase: true,
       tdd_mode: false,
       discuss_mode: "discuss",
