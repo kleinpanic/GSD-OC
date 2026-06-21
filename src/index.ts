@@ -1,6 +1,7 @@
 import { definePluginEntry } from "openclaw/plugin-sdk/core";
 import { toolPluginMetadataSymbol } from "openclaw/plugin-sdk/tool-plugin";
 import { Type } from "typebox";
+import fs from "node:fs";
 import { autoEngageHandler } from "./hooks/auto-engage.js";
 import { autoAdvanceHandler } from "./hooks/auto-advance.js";
 import { runSubagent, type RunSubagentApi } from "./dispatch/run-subagent.js";
@@ -16,6 +17,7 @@ import { readGsdConfig, bootstrapGsdConfig } from "./engine/config.js";
 import { enforceToolGate, enforceSpawnPersona, gsdProjectRoot } from "./hooks/enforce-gate.js";
 import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
 import { addPhase, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone } from "./engine/lifecycle.js";
+import { scaffoldPlanning } from "./engine/scaffold.js";
 import { validateArtifacts, verifyPhaseCompleteness, validateConsistency, validateHealth, gapCheck } from "./engine/verify.js";
 import { pauseWork, resumeWork, writeThread, listThreads, closeThread, capture } from "./engine/session.js";
 import { addLearning, queryLearnings, pruneLearnings } from "./engine/learnings.js";
@@ -100,7 +102,7 @@ const commandParams = Type.Object(
 /** TypeBox schema for the gsd_state mutation tool (ENG-WRITE-01). */
 const stateParams = Type.Object(
   {
-    op: Type.String({ description: "set-status | record-progress | add-decision | add-blocker | add-phase | scaffold-phase | update-plan-progress | complete-phase | complete-requirement | complete-milestone" }),
+    op: Type.String({ description: "init | set-status | record-progress | add-decision | add-blocker | add-phase | scaffold-phase | update-plan-progress | complete-phase | complete-requirement | complete-milestone" }),
     status: Type.Optional(Type.String({ description: "For set-status (e.g. planning|executing|complete|error)." })),
     decision: Type.Optional(Type.String({ description: "For add-decision: the decision text." })),
     blocker: Type.Optional(Type.String({ description: "For add-blocker: the blocker text." })),
@@ -473,6 +475,10 @@ const entry = definePluginEntry({
               if (!args.blocker) return { ok: false, error: "add-blocker requires non-empty blocker text" };
               addBlocker(dir, args.blocker); break;
             // OCT-W1 write-engine ops (phase/roadmap/milestone/requirements CRUD):
+            case "init": {
+              fs.mkdirSync(dir, { recursive: true });
+              return { ok: true, op: args.op, ...scaffoldPlanning(dir, { projectName: args.name, description: args.goal }) };
+            }
             case "add-phase": {
               if (!args.name) return { ok: false, error: "add-phase requires a name" };
               const ph = addPhase(dir, args.name, { goal: args.goal });
