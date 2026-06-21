@@ -129,8 +129,12 @@ function hasUnresolvedVerificationFail(planningDir: string, phases: RoadmapPhase
         continue;
       }
       for (const raw of content.split("\n")) {
-        const line = raw.trim();
-        if (line.startsWith("#")) continue; // skip headings/comments
+        if (raw.trim().startsWith("#")) continue; // skip headings/comments (test before stripping bold)
+        // R8-HIGH: strip markdown bold so `**Status:** FAILED` (the standard verifier verdict form) is caught.
+        // This MUST mirror verificationPassed's bold-strip — otherwise a bold-field PASS is honored while a
+        // bold-field FAIL escapes the hard-stop gate, shipping a failed phase. (`**Result:** FAILED` inserts
+        // `**` between the field and the token, which the un-stripped field regex never matched.)
+        const line = raw.replace(/\*\*/g, "").trim();
         if (!/\bFAIL(ED)?\b/i.test(line)) continue;
         // H-01: anchor to the verdict grammar, not bare prose. Ignore negations
         // ("No FAIL conditions remain"), resolutions, and override-marked lines.
