@@ -42,3 +42,35 @@ test("renderCheckpointDiscord: action-row buttons with routable custom_ids", asy
   assert.equal(many.components.length, 2);
   assert.equal(many.components[0].components.length, 5);
 });
+
+test("gsd_session checkpoint-reply routes a human reply (incl. a raw custom_id) back to an option id", async () => {
+  const mod = await import("../src/index.js");
+  const tools: { name: string; execute: (id: string, a: unknown, s?: unknown) => Promise<{ ok: boolean; chosen?: string | null }> }[] = [];
+  (mod.default as { register: (api: unknown) => void }).register({
+    registerService() {}, registerTool(t: never) { tools.push(t); }, registerCommand() {}, registerHook() {}, registerInternalHook() {},
+    session: { state: { registerSessionExtension() {} } }, pluginConfig: {},
+  });
+  const session = tools.find((t) => t.name === "gsd_session")!;
+  const options = [{ id: "pass", label: "Passed" }, { id: "fail", label: "Failed" }];
+  // by number
+  assert.equal((await session.execute("x", { op: "checkpoint-reply", text: "1", options }, undefined)).chosen, "pass");
+  // by raw Discord custom_id
+  assert.equal((await session.execute("x", { op: "checkpoint-reply", text: "gsd:human-verify:fail", options }, undefined)).chosen, "fail");
+  // unrecognized → ok:false
+  assert.equal((await session.execute("x", { op: "checkpoint-reply", text: "huh", options }, undefined)).ok, false);
+});
+
+test("sessionParams schema accepts checkpoint's options arg (host would reject otherwise)", async () => {
+  const { Value } = await import("typebox/value");
+  const mod = await import("../src/index.js");
+  // pull the registered tool's parameters schema (the real one the host validates against)
+  let sessionSchema: unknown;
+  (mod.default as { register: (api: unknown) => void }).register({
+    registerService() {}, registerTool(t: { name: string; parameters: unknown }) { if (t.name === "gsd_session") sessionSchema = t.parameters; },
+    registerCommand() {}, registerHook() {}, registerInternalHook() {}, session: { state: { registerSessionExtension() {} } }, pluginConfig: {},
+  });
+  assert.ok(sessionSchema, "gsd_session registered");
+  // a checkpoint call with options must pass schema validation (additionalProperties:false would reject a stray key)
+  assert.ok(Value.Check(sessionSchema as never, { op: "checkpoint", text: "pick", type: "decision", options: [{ id: "a", label: "A" }] }), "checkpoint+options validates");
+  assert.ok(Value.Check(sessionSchema as never, { op: "checkpoint-reply", text: "1", options: [{ id: "a", label: "A" }] }), "checkpoint-reply validates");
+});

@@ -29,7 +29,7 @@ import path from "node:path";
 import { validateArtifacts, verifyPhaseCompleteness, validateConsistency, validateHealth, gapCheck } from "./engine/verify.js";
 import { scanUat, auditOpen } from "./engine/audit.js";
 import { pauseWork, resumeWork, writeThread, listThreads, closeThread, capture } from "./engine/session.js";
-import { buildCheckpoint, renderCheckpointDiscord, type CheckpointType, type GateOption } from "./engine/checkpoint.js";
+import { buildCheckpoint, renderCheckpointDiscord, parseCheckpointReply, type CheckpointType, type GateOption } from "./engine/checkpoint.js";
 import { addLearning, queryLearnings, pruneLearnings } from "./engine/learnings.js";
 import { scanInjection } from "./engine/security.js";
 import { suggestFlags } from "./orchestrate/flags.js";
@@ -66,16 +66,17 @@ const learningsParams = Type.Object(
   { additionalProperties: false },
 );
 
-/** TypeBox schema for gsd_session — pause/resume + thread + capture lifecycle features. */
+/** TypeBox schema for gsd_session — pause/resume + thread + capture + checkpoint gate lifecycle features. */
 const sessionParams = Type.Object(
   {
-    op: Type.String({ description: "pause | resume | thread | threads | close-thread | capture" }),
+    op: Type.String({ description: "pause | resume | thread | threads | close-thread | capture | checkpoint | checkpoint-reply" }),
     reason: Type.Optional(Type.String({ description: "For pause: why." })),
     next_step: Type.Optional(Type.String({ description: "For pause: the next step to resume from." })),
     name: Type.Optional(Type.String({ description: "Thread name (for thread/close-thread)." })),
     content: Type.Optional(Type.String({ description: "For thread: the note text." })),
-    text: Type.Optional(Type.String({ description: "For capture: the idea/task text." })),
-    type: Type.Optional(Type.String({ description: "For capture: idea|task|seed|note." })),
+    text: Type.Optional(Type.String({ description: "For capture: the idea/task text. For checkpoint: the gate prompt. For checkpoint-reply: the human's reply (number / id / label / custom_id)." })),
+    type: Type.Optional(Type.String({ description: "For capture: idea|task|seed|note. For checkpoint: decision|human-verify|human-action." })),
+    options: Type.Optional(Type.Array(Type.Object({ id: Type.String(), label: Type.String() }), { description: "For checkpoint (decision gates) / checkpoint-reply: the gate's choices." })),
   },
   { additionalProperties: false },
 );
@@ -680,6 +681,14 @@ const entry = definePluginEntry({
               const gate = buildCheckpoint(((args.type as CheckpointType) || "decision"), args.text, { options, discord });
               // When discord_gates is on, also hand the agent the exact Discord component payload to send.
               return { ok: true, gate, ...(discord ? { discord: renderCheckpointDiscord(gate) } : {}) };
+            }
+            case "checkpoint-reply": {
+              // Resolve a human's free-text / button reply (content or custom_id 'gsd:<type>:<id>') back to an
+              // option id — the routing half of the gate (without it, a shown gate is a dead end).
+              if (!args.text || !Array.isArray(args.options)) return { ok: false, error: "checkpoint-reply requires text (the reply) + options (the gate's options)" };
+              const reply = args.text.replace(/^gsd:[a-z-]+:/, ""); // accept a raw custom_id too
+              const chosen = parseCheckpointReply({ options: args.options as GateOption[] }, reply);
+              return { ok: chosen != null, chosen };
             }
             default: return { ok: false, error: "unknown op: " + args?.op };
           }
