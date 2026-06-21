@@ -557,9 +557,16 @@ const entry = definePluginEntry({
             case "update-plan-progress":
               if (!args.phase || args.plans == null) return { ok: false, error: "update-plan-progress requires phase + plans" };
               return { ok: updatePlanProgress(dir, args.phase, args.plans, args.done), op: args.op };
-            case "complete-phase":
+            case "complete-phase": {
               if (!args.phase) return { ok: false, error: "complete-phase requires phase" };
-              return { ok: markPhaseComplete(dir, args.phase), op: args.op };
+              // Flow-2 honesty: this marks the ROADMAP **Status:** Complete (display) but route() advances on a
+              // PASSED VERIFICATION.md, NOT this line — so the next route() won't move past the phase until the
+              // verifier writes one. We do NOT auto-write a PASSED verification here (that would be the unsafe
+              // gate-skip): surface the requirement so the caller isn't surprised the loop didn't advance.
+              const ok = markPhaseComplete(dir, args.phase);
+              const verified = verifyPhaseCompleteness(dir, args.phase).ok;
+              return { ok, op: args.op, roadmap_marked: ok, route_will_advance: verified, note: verified ? undefined : "ROADMAP marked Complete, but route() needs a PASSED VERIFICATION.md (run verify-work) before it advances." };
+            }
             case "complete-requirement":
               if (!args.req) return { ok: false, error: "complete-requirement requires req" };
               return { ok: markRequirementComplete(dir, args.req), op: args.op };
