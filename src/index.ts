@@ -19,6 +19,8 @@ import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mut
 import { addPhase, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone } from "./engine/lifecycle.js";
 import { scaffoldPlanning } from "./engine/scaffold.js";
 import { createAutoRepo, type RepoMode } from "./engine/repo.js";
+import { createWorkBranch } from "./engine/branch.js";
+import { resolveReviewer, crossAiReview, type ReviewFinding } from "./orchestrate/cross-ai-review.js";
 import path from "node:path";
 import { validateArtifacts, verifyPhaseCompleteness, validateConsistency, validateHealth, gapCheck } from "./engine/verify.js";
 import { scanUat, auditOpen } from "./engine/audit.js";
@@ -105,7 +107,7 @@ const commandParams = Type.Object(
 /** TypeBox schema for the gsd_state mutation tool (ENG-WRITE-01). */
 const stateParams = Type.Object(
   {
-    op: Type.String({ description: "init | set-status | record-progress | add-decision | add-blocker | add-phase | scaffold-phase | update-plan-progress | complete-phase | complete-requirement | complete-milestone" }),
+    op: Type.String({ description: "init | branch | set-status | record-progress | add-decision | add-blocker | add-phase | scaffold-phase | update-plan-progress | complete-phase | complete-requirement | complete-milestone" }),
     status: Type.Optional(Type.String({ description: "For set-status (e.g. planning|executing|complete|error)." })),
     decision: Type.Optional(Type.String({ description: "For add-decision: the decision text." })),
     blocker: Type.Optional(Type.String({ description: "For add-blocker: the blocker text." })),
@@ -121,6 +123,7 @@ const stateParams = Type.Object(
     req: Type.Optional(Type.String({ description: "For complete-requirement: the REQ id (e.g. RET-01)." })),
     version: Type.Optional(Type.String({ description: "For complete-milestone: the milestone version (e.g. v1.1)." })),
     create_repo: Type.Optional(Type.Boolean({ description: "For init: also create a GitHub repo (private by default per config.git.auto_repo) + push the scaffold." })),
+    kind: Type.Optional(Type.String({ description: "For branch: phase | milestone | quick (which branching template)." })),
   },
   { additionalProperties: false },
 );
@@ -435,12 +438,38 @@ const entry = definePluginEntry({
         } catch {
           /* retrieval degraded — still return the resolution */
         }
+        // Cross-AI review: for a review command with review.external configured, resolve the external reviewers
+        // (model-ref or ACP harness agentId per the ACP research) and — when the subagent runtime is reachable —
+        // dispatch each via runSubagent({model}) and aggregate, then converge (gsd-review --all parity).
+        let crossAi: Record<string, unknown> | undefined;
+        if (/review/.test(command)) {
+          const cfgRoot = gsdProjectRoot(process.cwd());
+          const review = (readGsdConfig(cfgRoot ? `${cfgRoot}/.planning` : ".planning").config.review ?? {}) as { external?: string[]; models?: Record<string, string> };
+          const external = Array.isArray(review.external) ? review.external : [];
+          if (external.length) {
+            const reviewers = external.map((e) => resolveReviewer(e, review.models ?? {}));
+            const rt = pluginApi?.runtime?.subagent ? pluginApi : null;
+            if (rt) {
+              const base = (typeof pluginConfig?.workerAgent === "string" && pluginConfig.workerAgent) || "dev";
+              const dispatch = async (rv: { id: string; modelRef?: string }): Promise<ReviewFinding[]> => {
+                const res = await runSubagent(rt as never, "gsd-code-reviewer", `Cross-AI review (${rv.id}) of the current changes. Report findings with severity HIGH/MEDIUM/LOW. ${args?.intent ?? ""}`, { baseAgentId: base, model: rv.modelRef });
+                const sev = /\bhigh\b/i.test(res.text || "") ? "high" : /\bmedium\b/i.test(res.text || "") ? "medium" : "low";
+                return res.status === "ok" ? [{ reviewer: rv.id, severity: sev as never, text: (res.text || "").slice(0, 400) }] : [];
+              };
+              const verdict = await crossAiReview(reviewers, command, dispatch);
+              crossAi = { reviewers: reviewers.map((r) => r.id), findings: verdict.findings, high: verdict.highCount };
+            } else {
+              crossAi = { reviewers: reviewers.map((r) => r.id), note: "runtime unreachable — dispatch each reviewer via your own sessions_spawn with its model" };
+            }
+          }
+        }
         return {
           ok: true,
           command,
           subagent,
           flags,
           workflow,
+          ...(crossAi ? { cross_ai_review: crossAi } : {}),
           ...(injection.length ? { injection_warning: injection } : {}),
           how_to_run: subagent
             ? `Dispatch the '${subagent}' subagent (your sessions_spawn) with task: "${command}${flags.length ? " " + flags.join(" ") : ""}". The GSD persona is auto-injected by the enforce-gate.`
@@ -458,7 +487,7 @@ const entry = definePluginEntry({
       description:
         "Advance GSD project state in .planning/STATE.md (op: set-status | record-progress | add-decision | add-blocker). Call this as GSD work completes so the route engine sees live state.",
       parameters: stateParams,
-      async execute(_toolCallId: string, args: { op?: string; status?: string; decision?: string; blocker?: string; total_plans?: number; completed_plans?: number; total_phases?: number; completed_phases?: number; name?: string; goal?: string; phase?: string; plans?: number; done?: number; req?: string; version?: string; create_repo?: boolean }, _signal?: unknown) {
+      async execute(_toolCallId: string, args: { op?: string; status?: string; decision?: string; blocker?: string; total_plans?: number; completed_plans?: number; total_phases?: number; completed_phases?: number; name?: string; goal?: string; phase?: string; plans?: number; done?: number; req?: string; version?: string; create_repo?: boolean; kind?: string }, _signal?: unknown) {
         // Best-effort project resolution: walk up from cwd to a .planning root. The tool execute context
         // carries NO workspaceDir (SDK limit), so when cwd isn't the workspace (gateway home) this falls
         // back to cwd-relative .planning. The robust state-advance channel is agent_end (workspaceDir) — SDK-03.
@@ -488,6 +517,10 @@ const entry = definePluginEntry({
                 repo = createAutoRepo(path.dirname(dir), mode, { name: args.name });
               }
               return { ok: true, op: args.op, ...scaffolded, ...(repo ? { repo } : {}) };
+            }
+            case "branch": {
+              const git = (readGsdConfig(dir).config.git ?? {}) as Record<string, unknown>;
+              return { op: args.op, ...createWorkBranch(path.dirname(dir), git, (args.kind as never) ?? "phase", { phase: args.phase, milestone: args.version, slug: args.name }) };
             }
             case "add-phase": {
               if (!args.name) return { ok: false, error: "add-phase requires a name" };
