@@ -288,3 +288,28 @@ An agent in a `~/codeWS` project receives the prompt **"add OAuth login"**.
 The result: the OAuth work is researched, threat-modeled, planned, implemented, reviewed, and
 verified through the full GSD lifecycle — with edits gated until the phase is planned — without the
 user typing a single `/command`.
+
+## Configuration layer (operator-tunable)
+
+GSD-OC declares an OpenClaw plugin **config schema** — set these under `plugins.entries.gsd-oc.config` in
+the host `openclaw.json` (the plugin reads them via the SDK; it never writes host config):
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `engageMode` | `"workspace" \| "intent" \| "off"` | `workspace` | `workspace` = engage on a coding cwd + coding intent; `intent` = engage on coding intent **anywhere** (no cwd requirement — for non-fixed-dir setups); `off` = no auto-engage (tools still work). |
+| `codingRoots` | `string[]` | `[]` | Extra dirs to treat as coding workspaces (in addition to project markers like `.git`). Supports `~` and `$VAR`; multiple dirs allowed. Use for code dirs not named `codeWS` or kept elsewhere. |
+| `includeDefaultRoot` | `boolean` | `true` | Include the built-in `$HOME/codeWS` default root. Set `false` to rely only on `codingRoots` + markers. |
+| `workerAgent` | `string` | `dev` | Allowlisted base agent that hosts GSD personas when the orchestrator drives. |
+| `autoEngage` / `disabled` | `boolean` | `true` / `false` | Master switches for engagement. |
+
+Detection is **root-agnostic by default**: any directory carrying a project marker (`.git`, `package.json`,
+`.planning`, `pyproject.toml`, `Cargo.toml`, `go.mod`, `tsconfig.json`) — or any ancestor of it — is a coding
+workspace regardless of name or location. `codingRoots` only matters for marker-less dirs.
+
+Example (engage anywhere on coding intent, plus two custom roots):
+```jsonc
+{ "plugins": { "entries": { "gsd-oc": { "config": {
+  "engageMode": "intent",
+  "codingRoots": ["~/work/repos", "$PROJECTS"]
+} } } } }
+```

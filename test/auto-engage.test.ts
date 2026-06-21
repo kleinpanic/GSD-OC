@@ -134,3 +134,39 @@ test("isCodingWorkspace fires by MARKER outside any root (the auto-engage gap fi
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+import { resolveEngageConfig } from "../src/hooks/auto-engage.js";
+
+test("CONFIG: engageMode 'intent' engages on coding intent ANYWHERE (no cwd requirement)", () => {
+  const r = autoEngageHandler(evt, { workspaceDir: "/tmp/not-a-project" }, { pluginConfig: { engageMode: "intent" } });
+  assert.ok(r, "intent mode engages outside any coding workspace");
+  // but still respects the intent gate — pure chat does not engage
+  assert.equal(autoEngageHandler({ prompt: "hi", messages: [] }, { workspaceDir: "/tmp/x" }, { pluginConfig: { engageMode: "intent" } }), undefined);
+});
+
+test("CONFIG: engageMode 'off' never engages, even in a coding workspace", () => {
+  assert.equal(autoEngageHandler(evt, { workspaceDir: codeWS }, { pluginConfig: { engageMode: "off" } }), undefined);
+});
+
+test("CONFIG: codingRoots adds a custom dir as a coding workspace (marker-less)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "myproj-")); // no marker, not under codeWS
+  try {
+    assert.equal(autoEngageHandler(evt, { workspaceDir: dir }), undefined, "unconfigured marker-less dir → no engage");
+    const r = autoEngageHandler(evt, { workspaceDir: dir }, { pluginConfig: { codingRoots: [dir] } });
+    assert.ok(r, "configured root engages");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("CONFIG: includeDefaultRoot:false drops the built-in $HOME/codeWS default", () => {
+  const cfg = resolveEngageConfig({ includeDefaultRoot: false });
+  assert.equal(cfg.roots.length, 0, "no default root when disabled");
+  const withDefault = resolveEngageConfig({});
+  assert.ok(withDefault.roots.some((r) => r.endsWith("codeWS")), "default $HOME/codeWS present otherwise");
+});
+
+test("CONFIG: codingRoots expands ~ and $VAR", () => {
+  process.env.GSD_TEST_ROOT = "/tmp/gsdtestroot";
+  const cfg = resolveEngageConfig({ codingRoots: ["~/work", "$GSD_TEST_ROOT/sub"] });
+  assert.ok(cfg.roots.some((r) => r.includes("/work")), "~ expanded to home");
+  assert.ok(cfg.roots.some((r) => r === "/tmp/gsdtestroot/sub"), "$VAR expanded");
+});

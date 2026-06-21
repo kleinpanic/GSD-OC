@@ -19,9 +19,53 @@ export type BeforePromptBuildResult = {
   appendSystemContext?: string;
 };
 
-/** Default coding-workspace roots that trigger auto-engage (ENG-02). Operators can extend via pluginConfig. */
-function codingWorkspaceRoots(extra: string[] = []): string[] {
-  return [resolve(homedir(), "codeWS"), ...extra.map((r) => resolve(r))];
+/**
+ * Engagement modes (configurable via pluginConfig.engageMode — official-release versatility):
+ *  - "workspace" (default): engage when cwd is a coding workspace (a configured root OR a project marker)
+ *    AND the intent is coding work.
+ *  - "intent": engage on coding INTENT alone, regardless of cwd — for users who don't keep code in a fixed
+ *    place, or want GSD driven by what they ask rather than where they are.
+ *  - "off": never auto-engage (the gsd_* tools still work on demand).
+ */
+export type EngageMode = "workspace" | "intent" | "off";
+
+/** Expand a leading `~` and `$VAR`/`${VAR}` env refs in a configured root path (so users can write "~/work"
+ *  or "$PROJECTS"). Unknown vars expand to empty (the resolve still yields a usable absolute path). */
+function expandPath(p: string): string {
+  let s = p.startsWith("~") ? homedir() + p.slice(1) : p;
+  s = s.replace(/\$\{(\w+)\}|\$(\w+)/g, (_m, a, b) => process.env[a || b] ?? "");
+  return resolve(s);
+}
+
+/** The built-in default coding root: `$HOME/codeWS` (computed at runtime — not a hardcoded username). It's a
+ *  convenience for the common case; users who keep code elsewhere are covered by markers + configured roots,
+ *  and can drop it with `includeDefaultRoot: false`. */
+function defaultRoot(): string {
+  return resolve(homedir(), "codeWS");
+}
+
+/** Coding-workspace roots: the default `$HOME/codeWS` (unless disabled) + any operator-configured dirs.
+ *  Real projects are ALSO detected root-agnostically by markers below — roots only matter for marker-less dirs.
+ *  Accepts multiple dirs with `~`/`$VAR` expansion. */
+function codingWorkspaceRoots(extra: string[] = [], includeDefault = true): string[] {
+  const base = includeDefault ? [defaultRoot()] : [];
+  return [...base, ...extra.filter((r) => typeof r === "string" && r.length > 0).map(expandPath)];
+}
+
+/** Read the engage config from the plugin config LAYER (pluginConfig), defensively. Surfaced as the plugin's
+ *  declared configSchema (index.ts) so operators set it through the standard OpenClaw plugin config. */
+export function resolveEngageConfig(pluginConfig: Record<string, unknown> | undefined): {
+  roots: string[];
+  mode: EngageMode;
+} {
+  const pc = pluginConfig ?? {};
+  const rootsRaw = Array.isArray((pc as { codingRoots?: unknown }).codingRoots)
+    ? ((pc as { codingRoots: unknown[] }).codingRoots.filter((r) => typeof r === "string") as string[])
+    : [];
+  const includeDefault = (pc as { includeDefaultRoot?: unknown }).includeDefaultRoot !== false;
+  const m = (pc as { engageMode?: unknown }).engageMode;
+  const mode: EngageMode = m === "intent" || m === "off" ? m : "workspace";
+  return { roots: codingWorkspaceRoots(rootsRaw, includeDefault), mode };
 }
 
 /** Filesystem markers that identify any directory as a real coding project (root-agnostic). */
@@ -53,7 +97,7 @@ function hasCodingMarker(dir: string): boolean {
  */
 export function isCodingWorkspace(
   dir: string | undefined,
-  roots: string[] = codingWorkspaceRoots(),
+  roots: string[] = [],
 ): boolean {
   if (!dir) return false;
   const target = resolve(dir);
@@ -108,14 +152,14 @@ export function autoEngageHandler(
   // Fall back to process.cwd() for the codeWS gate too (not just the opt-out check): a missing
   // ctx.workspaceDir must not block activation when the real cwd is inside a coding workspace (cross-AI F5).
   const cwd = ctx?.workspaceDir ?? process.cwd();
-  // Operators can add coding roots via pluginConfig.codingRoots (string[]); markers cover the rest.
-  const extraRoots = Array.isArray((deps.pluginConfig as { codingRoots?: unknown })?.codingRoots)
-    ? ((deps.pluginConfig as { codingRoots: string[] }).codingRoots)
-    : [];
-  const engage =
-    isCodingWorkspace(cwd, codingWorkspaceRoots(extraRoots)) &&
+  const { roots, mode } = resolveEngageConfig(deps.pluginConfig);
+  if (mode === "off") return; // operator disabled auto-engage entirely
+  // Intent + opt-out gates apply in every mode. The WORKSPACE gate applies only in "workspace" mode —
+  // "intent" mode engages on coding intent anywhere (versatile for non-fixed-dir setups).
+  const intentEngages =
     classifyIntent(event.prompt).engage &&
     !optedOut({ cwd, pluginConfig: deps.pluginConfig, sessionDisabled: deps.sessionDisabled });
-  if (!engage) return;
+  if (!intentEngages) return;
+  if (mode === "workspace" && !isCodingWorkspace(cwd, roots)) return;
   return { prependSystemContext: GSD_META_PROMPT };
 }

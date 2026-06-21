@@ -6,7 +6,46 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "engageMode": {
+        "type": "string",
+        "enum": [
+          "workspace",
+          "intent",
+          "off"
+        ],
+        "default": "workspace",
+        "description": "When to auto-engage GSD: workspace (cwd+intent), intent (intent anywhere), off."
+      },
+      "codingRoots": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [],
+        "description": "Extra coding-workspace dirs (~ and $VAR ok); multiple allowed."
+      },
+      "includeDefaultRoot": {
+        "type": "boolean",
+        "default": true,
+        "description": "Include the built-in $HOME/codeWS default root."
+      },
+      "workerAgent": {
+        "type": "string",
+        "default": "dev",
+        "description": "Allowlisted base agent hosting GSD personas when driving."
+      },
+      "autoEngage": {
+        "type": "boolean",
+        "default": true,
+        "description": "Master switch for auto-engage."
+      },
+      "disabled": {
+        "type": "boolean",
+        "default": false,
+        "description": "Disable engagement entirely."
+      }
+    }
   },
   "activation": {
     "onStartup": true

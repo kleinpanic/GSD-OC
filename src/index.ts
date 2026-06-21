@@ -385,7 +385,49 @@ Object.defineProperty(entry, toolPluginMetadataSymbol, {
     name: PLUGIN_NAME,
     description: PLUGIN_DESCRIPTION,
     activation: { onStartup: true },
-    configSchema: { type: "object", additionalProperties: false, properties: {} },
+    // Declared config LAYER — operators tune GSD-OC through the standard OpenClaw plugin config
+    // (plugins.entries.gsd-oc.config). Validated by the host against this schema. The plugin reads these
+    // values via pluginConfig; it NEVER writes host config.
+    configSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        engageMode: {
+          type: "string",
+          enum: ["workspace", "intent", "off"],
+          default: "workspace",
+          description:
+            "When to auto-engage GSD: 'workspace' = coding cwd + coding intent (default); 'intent' = coding intent ANYWHERE (no cwd requirement — for non-fixed-dir setups); 'off' = no auto-engage (gsd_* tools still work).",
+        },
+        codingRoots: {
+          type: "array",
+          items: { type: "string" },
+          default: [],
+          description:
+            "Extra directories to treat as coding workspaces (in addition to project markers). Supports ~ and $VAR. Use this for code dirs that aren't named codeWS or live elsewhere; multiple dirs allowed.",
+        },
+        includeDefaultRoot: {
+          type: "boolean",
+          default: true,
+          description: "Include the built-in $HOME/codeWS default root. Set false to rely only on codingRoots + project markers (.git/package.json/etc).",
+        },
+        workerAgent: {
+          type: "string",
+          default: "dev",
+          description: "Allowlisted base agent that hosts GSD subagent personas when the orchestrator drives.",
+        },
+        autoEngage: {
+          type: "boolean",
+          default: true,
+          description: "Master switch for auto-engage. false (or engageMode 'off') disables prompt-injection engagement.",
+        },
+        disabled: {
+          type: "boolean",
+          default: false,
+          description: "Disable GSD-OC engagement entirely (equivalent to engageMode 'off').",
+        },
+      },
+    },
     tools: [
       {
         name: ORCHESTRATE_TOOL,
