@@ -96,7 +96,7 @@ export function autoAdvanceHandler(
   const next = route(planningDir);
   // /goal autonomy: drive through gates only when the project config opts in (mode:auto OR workflow.auto_advance).
   // Flow-6 fix: read the FULL profiled config so a .gsd-profile / surface that sets mode:auto reaches the driver.
-  const cfg = resolveProfiledConfig(base, readGsdConfig(planningDir).config);
+  const cfg = resolveProfiledConfig(base, readGsdConfig(planningDir).overrides);
   const wf = cfg.workflow as { auto_advance?: boolean; auto_verify?: boolean } | undefined;
   const autoGates = cfg.mode === "auto" || wf?.auto_advance === true;
   const autoVerify = wf?.auto_verify === true; // C-2: a SEPARATE opt-in; mode:auto alone never auto-passes verify

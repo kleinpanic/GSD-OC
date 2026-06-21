@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applySurfaceProfile, readInstallProfile, resolveProfiledConfig, isSurfaceProfile } from "../src/engine/profile.js";
@@ -55,5 +55,22 @@ test("L-2: project config WINS over the surface preset it selects", () => {
     const cfg = resolveProfiledConfig(d, { profiles: { surface: "full" } as never, workflow: { ui_review: false } as never });
     assert.equal((cfg.workflow as Record<string, unknown>).security_asvs_level, 2, "surface 'full' applied");
     assert.equal((cfg.workflow as Record<string, unknown>).ui_review, false, "project override WINS over the surface preset");
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+test("Flow-6: readGsdConfig exposes SPARSE overrides; a .gsd-profile reaches resolveProfiledConfig (not clobbered by defaults)", async () => {
+  const { readGsdConfig } = await import("../src/engine/config.js");
+  const d = mkdtempSync(join(tmpdir(), "gsd-f6-"));
+  const p = join(d, ".planning"); mkdirSync(p, { recursive: true });
+  try {
+    // project config sets ONLY commit_docs — overrides must be sparse (just that key), not the full defaulted config
+    writeFileSync(join(p, "config.json"), JSON.stringify({ commit_docs: false }));
+    const { overrides } = readGsdConfig(p);
+    assert.deepEqual(overrides, { commit_docs: false }, "overrides is the sparse file, not the defaulted config");
+    // a .gsd-profile disabling the gate must survive the merge (the Flow-6 bug clobbered it with the default true)
+    writeFileSync(join(d, ".gsd-profile"), JSON.stringify({ workflow: { enforce_tool_gate: false } }));
+    const cfg = resolveProfiledConfig(d, overrides);
+    assert.equal((cfg.workflow as Record<string, unknown>).enforce_tool_gate, false, ".gsd-profile gate-disable reaches the resolved config");
+    assert.equal(cfg.commit_docs, false, "project override still wins");
   } finally { rmSync(d, { recursive: true, force: true }); }
 });

@@ -51,7 +51,7 @@ export function readInstallProfile(repoRoot: string): Record<string, unknown> | 
  * Resolve the effective config: defaults → install profile (.gsd-profile) → surface profile → project config.
  * Later layers win (project config is most specific). Surface is read from the resolved config's profiles.surface.
  */
-export function resolveProfiledConfig(repoRoot: string, projectConfig?: Partial<GsdConfig>): GsdConfig {
+export function resolveProfiledConfig(repoRoot: string, projectConfig?: Record<string, unknown>): GsdConfig {
   let cfg = defaultGsdConfig();
   const install = readInstallProfile(repoRoot);
   if (install) cfg = mergeGsdConfig(cfg, install);
@@ -60,6 +60,6 @@ export function resolveProfiledConfig(repoRoot: string, projectConfig?: Partial<
   // (the stated "project config is most specific" invariant). Order: defaults → install → [surface] → project.
   const surface = (projectConfig?.profiles as { surface?: string } | undefined)?.surface ?? (cfg.profiles as { surface?: string }).surface;
   if (surface && isSurfaceProfile(surface)) cfg = applySurfaceProfile(cfg, surface);
-  if (projectConfig) cfg = mergeGsdConfig(cfg, projectConfig);
+  if (projectConfig && Object.keys(projectConfig).length) cfg = mergeGsdConfig(cfg, projectConfig);
   return cfg;
 }

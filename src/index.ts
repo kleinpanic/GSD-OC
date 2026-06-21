@@ -19,6 +19,7 @@ import { enforceToolGate, enforceSpawnPersona, gsdProjectRoot } from "./hooks/en
 import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
 import { addPhase, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone } from "./engine/lifecycle.js";
 import { scaffoldPlanning } from "./engine/scaffold.js";
+import { contextTemplate, artifactName } from "./engine/artifacts.js";
 import { buildProgress } from "./engine/progress.js";
 import { undoLast } from "./engine/undo.js";
 import { createAutoRepo, type RepoMode } from "./engine/repo.js";
@@ -410,8 +411,8 @@ const entry = definePluginEntry({
         const repoRoot = gsdProjectRoot(process.cwd()) ?? process.cwd();
         let created = false;
         if (args?.bootstrap) created = bootstrapGsdConfig(".planning");
-        const { config: projectConfig, source } = readGsdConfig(".planning");
-        let config = resolveProfiledConfig(repoRoot, projectConfig);
+        const { overrides: projectOverrides, source } = readGsdConfig(".planning");
+        let config = resolveProfiledConfig(repoRoot, projectOverrides);
         if (args?.profile && isSurfaceProfile(args.profile)) config = applySurfaceProfile(config, args.profile);
         return { source, created, surface: (config.profiles as { surface?: string }).surface, model_profile: config.model_profile, workflow: config.workflow, git: config.git, review: config.review };
       },
@@ -539,7 +540,12 @@ const entry = definePluginEntry({
             }
             case "scaffold-phase": {
               if (!args.phase || !args.name) return { ok: false, error: "scaffold-phase requires phase + name" };
-              return { ok: true, op: args.op, dir: scaffoldPhaseDir(dir, args.phase, args.name) };
+              const phaseDir = scaffoldPhaseDir(dir, args.phase, args.name);
+              // Write the CONTEXT.md stub (route()-parseable) so the scaffolded phase advances discuss→plan instead
+              // of sitting empty. Idempotent: never clobber an existing CONTEXT authored by the discuss step.
+              const ctxFile = `${phaseDir}/${artifactName(args.phase, "context")}`;
+              if (!fs.existsSync(ctxFile)) fs.writeFileSync(ctxFile, contextTemplate(args.phase, args.name));
+              return { ok: true, op: args.op, dir: phaseDir, context: ctxFile };
             }
             case "update-plan-progress":
               if (!args.phase || args.plans == null) return { ok: false, error: "update-plan-progress requires phase + plans" };

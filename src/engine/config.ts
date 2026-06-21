@@ -154,18 +154,22 @@ export function mergeGsdConfig(base: GsdConfig, override: Record<string, unknown
  * Read the project's GSD config with defaults applied. Returns `{ config, source }` where source is
  * "file" when `.planning/config.json` was read, "default" when it was absent/unreadable.
  */
-export function readGsdConfig(planningDir = ".planning"): { config: GsdConfig; source: "file" | "default" } {
+export function readGsdConfig(planningDir = ".planning"): { config: GsdConfig; source: "file" | "default"; overrides: Record<string, unknown> } {
   const p = path.join(planningDir, "config.json");
   let raw: string;
   try {
     raw = fs.readFileSync(p, "utf8");
   } catch {
-    return { config: defaultGsdConfig(), source: "default" };
+    return { config: defaultGsdConfig(), source: "default", overrides: {} };
   }
   try {
-    return { config: deepMerge(defaultGsdConfig(), JSON.parse(raw)), source: "file" };
+    // `overrides` is the SPARSE parsed file (only the keys the project actually set) — callers that layer a
+    // .gsd-profile / surface profile must merge `overrides` LAST (not the defaulted `config`, which would clobber
+    // the profile with defaults on every unset key — the Flow-6 bug).
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return { config: deepMerge(defaultGsdConfig(), parsed), source: "file", overrides: parsed };
   } catch {
-    return { config: defaultGsdConfig(), source: "default" };
+    return { config: defaultGsdConfig(), source: "default", overrides: {} };
   }
 }
 

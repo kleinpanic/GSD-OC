@@ -105,7 +105,7 @@ export function enforceToolGate(
   const planningDir = `${projectRoot}/.planning`;
   // Flow-6 fix: resolve the FULL config (defaults → .gsd-profile → project → surface) so a profile that disables
   // the gate (or a 'minimal' surface) actually reaches enforcement — not just the bare .planning/config.json.
-  const config = resolveProfiledConfig(projectRoot, readGsdConfig(planningDir).config);
+  const config = resolveProfiledConfig(projectRoot, readGsdConfig(planningDir).overrides);
   if (config.workflow?.enforce_tool_gate === false) return; // explicit per-project disable
 
   const r = route(planningDir);
