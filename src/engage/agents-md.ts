@@ -62,18 +62,21 @@ export function mergeGsdSection(existing: string | null): string {
   if (!existing || existing.trim() === "") {
     return `# AGENTS.md\n\n${section}\n`;
   }
-  // Strip EVERY existing managed block (idempotency #2 — there may be more than one from an earlier buggy run),
-  // but ONLY markers that are NOT inside a user's code fence (#1 — a fenced example of the GSD block must not be
-  // treated as a real managed block and have the user's content between the markers deleted).
-  const stripped = stripManagedBlocks(existing);
+  // #4: preserve the file's line endings. If `existing` is uniformly CRLF, work on an LF-normalized copy and restore
+  // CRLF on output — otherwise the LF separators we insert would mix with the file's CRLF (corrupt-looking diff).
+  const uniformCrlf = /\r\n/.test(existing) && !/(?<!\r)\n/.test(existing);
+  const lf = existing.replace(/\r\n/g, "\n");
+  const restore = (s: string): string => (uniformCrlf ? s.replace(/\n/g, "\r\n") : s);
+  // Strip EVERY managed block (idempotency #2), but ONLY markers NOT inside a user's code fence (#1).
+  const stripped = stripManagedBlocks(lf);
   // Prepend the fresh section so it leads the file. Keep a leading `# AGENTS.md` title first if present.
-  const titleMatch = stripped.match(/^(# [^\n]*\r?\n)/);
+  const titleMatch = stripped.match(/^(# [^\n]*\n)/);
   if (titleMatch) {
     const title = titleMatch[1];
     const rest = stripped.slice(title.length).replace(/^\s*\n/, "");
-    return `${title}\n${section}\n\n${rest}`;
+    return restore(`${title}\n${section}\n\n${rest}`);
   }
-  return `${section}\n\n${stripped.replace(/^\s*\n/, "")}`;
+  return restore(`${section}\n\n${stripped.replace(/^\s*\n/, "")}`);
 }
 
 /** Remove every GSD managed block (GSD_BEGIN…GSD_END) whose markers sit OUTSIDE a code fence. Fence-aware so a

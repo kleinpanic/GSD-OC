@@ -40,3 +40,10 @@ test("re-merge is stable (running twice yields the same result)", () => {
   assert.equal(twice.split(GSD_BEGIN).length - 1, 1, "still exactly one block after a second merge");
   assert.match(twice, /## rules/);
 });
+
+test("#4: a CRLF AGENTS.md keeps CRLF (no mixed line endings inserted)", () => {
+  const out = mergeGsdSection("# AGENTS.md\r\n\r\n## rules\r\n- terse\r\n");
+  assert.ok(!/(?<!\r)\n/.test(out), "no bare-LF lines — the file stays uniformly CRLF");
+  // an LF file stays LF (no spurious CR)
+  assert.ok(!/\r/.test(mergeGsdSection("# AGENTS.md\n\n## rules\n")), "LF file stays LF");
+});
