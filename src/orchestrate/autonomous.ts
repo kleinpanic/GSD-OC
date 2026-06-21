@@ -36,16 +36,29 @@ export const ACTION_TO_AGENT: Record<string, string> = {
   "resume-work": "gsd-executor",
 };
 
+/** route() action → the manager.flags key whose default flags apply to that action (the /gsd-manager parity). */
+const ACTION_TO_MANAGER_FLAG: Record<string, string> = {
+  "discuss-phase": "discuss",
+  "plan-phase": "plan",
+  "execute-phase": "execute",
+};
+
 /** Build an AutoDispatch from a raw subagent-runner. Maps each route action to its subagent + a task message;
- *  actions with no subagent (none today, but defensively) succeed as no-ops so the loop can advance. */
+ *  actions with no subagent (none today, but defensively) succeed as no-ops so the loop can advance. `managerFlags`
+ *  is the config's `manager.flags` ({execute,discuss,plan}) — the default per-action flags the manager applies. */
 export function makeActionDispatcher(
   run: (agentId: string, message: string) => Promise<{ ok: boolean; output?: string }>,
   intent: string,
+  managerFlags: Record<string, string> = {},
 ): AutoDispatch {
   return async (r) => {
     const agent = ACTION_TO_AGENT[r.action];
     if (!agent) return { ok: true, output: `${r.action}: no subagent` };
-    return run(agent, `GSD ${r.action} for phase ${r.phase ?? "?"}. Project intent: ${intent}. Persist the phase artifacts under .planning/.`);
+    const flags = (managerFlags[ACTION_TO_MANAGER_FLAG[r.action] ?? ""] ?? "").trim();
+    return run(
+      agent,
+      `GSD ${r.action} for phase ${r.phase ?? "?"}${flags ? ` (flags: ${flags})` : ""}. Project intent: ${intent}. Persist the phase artifacts under .planning/.`,
+    );
   };
 }
 

@@ -346,7 +346,9 @@ const entry = definePluginEntry({
             const res = await runSubagent(runtimeApi as never, agentId, message, { baseAgentId: baseAgent });
             return { ok: res.status === "ok", output: res.text || `[${res.status}]` };
           };
-          const auto = await runAutonomous(".planning", makeActionDispatcher(run, intent), { autoGates: args?.autoGates === true });
+          // /gsd-manager parity: apply the config's manager.flags (per-action default flags) to each dispatch.
+          const managerFlags = ((readGsdConfig(".planning").config.manager as { flags?: Record<string, string> })?.flags) ?? {};
+          const auto = await runAutonomous(".planning", makeActionDispatcher(run, intent, managerFlags), { autoGates: args?.autoGates === true });
           return { ...planned, autonomous: true, completed: auto.completed, reason: auto.reason, haltedAt: auto.haltedAt, steps: auto.steps };
         }
         if (args?.drive && runtimeApi) {

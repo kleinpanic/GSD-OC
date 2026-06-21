@@ -68,3 +68,16 @@ test("runAutonomous reports failure when a dispatch fails", async () => {
     assert.equal(r.reason, "failure");
   } finally { rmSync(join(p, ".."), { recursive: true, force: true }); }
 });
+
+test("makeActionDispatcher applies manager.flags per action (/gsd-manager parity)", async () => {
+  const { makeActionDispatcher } = await import("../src/orchestrate/autonomous.js");
+  const seen: string[] = [];
+  const run = async (_agent: string, msg: string) => { seen.push(msg); return { ok: true }; };
+  const dispatch = makeActionDispatcher(run, "build a thing", { execute: "--tdd", plan: "--mvp" });
+  await dispatch({ action: "execute-phase", phase: "1", reason: "" } as never);
+  await dispatch({ action: "plan-phase", phase: "1", reason: "" } as never);
+  assert.match(seen[0], /flags: --tdd/);
+  assert.match(seen[1], /flags: --mvp/);
+  // an action with no manager flag → no flags clause
+  await dispatch({ action: "verify-work", phase: "1", reason: "" } as never);
+});
