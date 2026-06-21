@@ -40,6 +40,7 @@ test("opt-out: .gsd-off marker suppresses a coding prompt in codeWS (ENG-03/D-02
   // isCodingWorkspace is rooted at ~/codeWS, so use a real temp project under it would be
   // unsafe; instead drive the marker check via a cwd that IS a coding workspace by stubbing
   // workspaceDir to a temp dir under ~/codeWS and placing the marker there.
+  mkdirSync(join(homedir(), "codeWS"), { recursive: true });
   const dir = mkdtempSync(join(homedir(), "codeWS", "gsd-ae-"));
   try {
     // coding prompt, no marker -> fires
@@ -115,6 +116,7 @@ test("isCodingWorkspace: filesystem root '/' → false (bounded walk terminates)
 test("isCodingWorkspace fires by MARKER outside any root (the auto-engage gap fix)", () => {
   // A dir with a coding marker (.git/package.json/.planning) is a coding workspace regardless of path —
   // this is what makes GSD auto-engage in agent workspaces (~/.openclaw/workspace-*) not under ~/codeWS.
+  mkdirSync(join(homedir(), "codeWS"), { recursive: true });
   const dir = mkdtempSync(join(homedir(), "codeWS", "gsd-mk-")); // use a temp dir we can mark
   try {
     // create a temp OUTSIDE codeWS to prove marker-based (not root-based) detection. Use

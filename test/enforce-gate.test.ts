@@ -11,6 +11,7 @@ const edit = { toolName: "edit", params: { file: "x.ts" } };
 
 /** Build a coding-workspace tmp dir (carries .git marker) with a given .planning fixture copied in. */
 function ws(planningFixture: string | null) {
+  mkdirSync(join(homedir(), "codeWS"), { recursive: true });
   const dir = mkdtempSync(join(homedir(), "codeWS", "gsd-enf-"));
   mkdirSync(join(dir, ".git"), { recursive: true });
   if (planningFixture) {
