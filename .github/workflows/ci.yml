@@ -20,6 +20,8 @@ jobs:
         run: npm run build
       - name: Plugin manifest validates
         run: npx openclaw plugins validate || echo "::warning::openclaw validate unavailable in CI"
+      - name: Bench regression gate
+        run: npm run bench:gate
       - name: Test suite (node:test)
         run: npm test
       - name: Slot audit (registerCommand must stay 0)

@@ -1,0 +1,7 @@
+[
+  { "taskId": "c-ratelimit", "band": "complex", "gsdOn": true, "toolSequence": [{"name":"gsd_orchestrate","seq":1}], "firedSubagents": ["gsd-planner","gsd-executor","gsd-verifier"], "backboneVerbs": ["plan","execute","verify"], "blockedEdits": [], "falseAllows": 0, "totalTokens": 42000, "wallClockMs": 0, "reachedDone": true },
+  { "taskId": "c-ratelimit", "band": "complex", "gsdOn": false, "toolSequence": [], "firedSubagents": [], "backboneVerbs": [], "blockedEdits": [], "falseAllows": 0, "totalTokens": 51000, "wallClockMs": 0, "reachedDone": false },
+  { "taskId": "a-oauth", "band": "auth", "gsdOn": true, "toolSequence": [{"name":"gsd_orchestrate","seq":1}], "firedSubagents": ["gsd-planner","gsd-executor","gsd-security-auditor"], "backboneVerbs": ["plan","execute","verify"], "blockedEdits": [], "falseAllows": 0, "totalTokens": 60000, "wallClockMs": 0, "reachedDone": true },
+  { "taskId": "t-typo", "band": "trivial", "gsdOn": true, "toolSequence": [{"name":"read","input":{"file_path":"README.md"},"seq":1}], "firedSubagents": [], "backboneVerbs": [], "blockedEdits": [], "falseAllows": 0, "totalTokens": 820, "wallClockMs": 0, "reachedDone": true },
+  { "taskId": "t-typo", "band": "trivial", "gsdOn": false, "toolSequence": [], "firedSubagents": [], "backboneVerbs": [], "blockedEdits": [], "falseAllows": 0, "totalTokens": 900, "wallClockMs": 0, "reachedDone": true }
+]

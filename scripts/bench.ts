@@ -9,11 +9,27 @@
 import { listGsdSessions, buildTrace, defaultDbPath } from "../dist/bench/log-parse.js";
 import { tokenRot } from "../dist/bench/metrics.js";
 import { scoreBehavior } from "../dist/bench/rubric.js";
-import { existsSync } from "node:fs";
+import { computeSnapshot, compareToBaseline } from "../dist/bench/gate.js";
+import { BENCH_TASKS } from "../dist/bench/tasks.js";
+import { existsSync, readFileSync } from "node:fs";
 
 const asJson = process.argv.includes("--json");
+const gate = process.argv.includes("--gate");
+
+function runGate() {
+  const golden = JSON.parse(readFileSync("test/fixtures/bench-golden.json", "utf8"));
+  const baseline = JSON.parse(readFileSync("bench-baseline.json", "utf8"));
+  const snap = computeSnapshot(golden, BENCH_TASKS);
+  const { pass, regressions } = compareToBaseline(snap, baseline);
+  console.log("\nBench regression gate (golden A/B traces vs bench-baseline.json):\n");
+  for (const [k, v] of Object.entries(snap)) console.log("  " + k.padEnd(26) + " " + JSON.stringify(v));
+  if (pass) { console.log("\nPASS — no regression vs baseline."); process.exit(0); }
+  console.log("\nFAIL — regressions:"); for (const r of regressions) console.log("  " + r.metric + " " + r.bar + " (now " + r.current + ", baseline " + r.baseline + ")");
+  process.exit(1);
+}
 
 function main() {
+  if (gate) return runGate();
   const db = defaultDbPath();
   if (!existsSync(db)) {
     console.log("No lcm.db — run a real GSD session through the OpenClaw gateway first, then re-run `npm run bench`.");

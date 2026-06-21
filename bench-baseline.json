@@ -1,0 +1,12 @@
+{
+  "capturedAt": "2026-06-21",
+  "note": "Regression baseline for npm run bench:gate. Update via review when a metric genuinely improves.",
+  "metrics": {
+    "behavior.score.mean":   { "value": 0.85, "bar": "≥", "min": 0.80, "tol": 0.03 },
+    "skill.recall.mean":     { "value": 0.90, "bar": "≥", "min": 0.85, "tol": 0.03 },
+    "enforce.falseAllows":   { "value": 0,    "bar": "==", "eq": 0 },
+    "rot.redundantReads.max":{ "value": 1,    "bar": "≤", "max": 2 },
+    "overOrch.rate":         { "value": 0.0,  "bar": "≤", "max": 0.10 },
+    "lifecycle.completion":  { "value": 0.80, "bar": "≥", "min": 0.75, "tol": 0.02 }
+  }
+}

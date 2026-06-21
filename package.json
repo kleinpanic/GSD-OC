@@ -26,7 +26,8 @@
     "test": "tsc -p tsconfig.test.json && node --test \"dist-test/test/*.test.js\"",
     "health": "tsc && node scripts/copy-artifacts.mjs && node --experimental-strip-types scripts/health.ts",
     "health:strict": "node --experimental-strip-types scripts/health.ts --strict",
-    "bench": "tsc && node --experimental-strip-types scripts/bench.ts"
+    "bench": "tsc && node --experimental-strip-types scripts/bench.ts",
+    "bench:gate": "tsc && node --experimental-strip-types scripts/bench.ts --gate"
   },
   "dependencies": {
     "@lancedb/lancedb": "^0.30.0",
