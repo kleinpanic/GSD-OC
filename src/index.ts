@@ -223,6 +223,8 @@ const entry = definePluginEntry({
           ...base,
           path: path.map((s) => ({ verb: s.verb, skill: s.skill, gate: s.gate, reason: s.reason })),
           relevant_skills: retrieved.slice(0, 8).map((r) => ({ id: r.docId, modality: r.modalities })),
+          // WR-01: warn when the long-tail ranking is degraded (semantic configured but unreachable).
+          retrieval_degraded: embedAvailable(process.env) && !retrieved.some((r) => (r.modalities ?? []).includes("semantic")),
           // Agent-driven execution (the OpenClaw-native model — the plugin plans, the agent executes):
           // dispatch each NON-gate step's `skill` as a subagent via your sessions_spawn tool, in order;
           // PAUSE at each `gate:true` step for the required discussion/approval before continuing.
@@ -272,9 +274,14 @@ const entry = definePluginEntry({
         const semantic = embedAvailable(process.env); // false → lexical+trigram only (degraded)
         if (!intent) return { intent: "", semantic, results: [] };
         const docs = await retrieve(intent, { topK: args?.topK ?? 8 });
+        // WR-01: semantic was CONFIGURED (embedAvailable) but if no result carries the "semantic" modality it
+        // silently fell back to lexical+trigram (spark unreachable) — surface that so the ranking isn't trusted
+        // as full-hybrid when it's degraded.
+        const degraded = semantic && !docs.some((r) => (r.modalities ?? []).includes("semantic"));
         return {
           intent,
           semantic,
+          degraded,
           results: docs.map((r) => ({ id: r.docId, kind: r.kind, title: r.title, score: r.score, modality: r.modalities })),
         };
       },
