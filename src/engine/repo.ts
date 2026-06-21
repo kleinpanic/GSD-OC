@@ -77,9 +77,20 @@ export function createAutoRepo(
   // ensure a git repo locally
   if (!run("git", ["rev-parse", "--is-inside-work-tree"], repoRoot).ok) run("git", ["init", "-q"], repoRoot);
 
-  // PRIVACY: a public repo must not ship .planning — gitignore it before the first push
+  // PRIVACY (BLOCKER C): a public repo must not ship .planning. gitignore alone only blocks UNTRACKED files — in
+  // the normal GSD flow .planning was already committed (init → scaffold → gsd_state commit), so it would STILL be
+  // pushed. So also untrack it (`git rm -r --cached`, best-effort — ok if it was never tracked) and COMMIT the
+  // .gitignore + the removal, so the pushed tree genuinely excludes .planning.
   const planningStripped = mode === "public";
-  if (planningStripped) gitignorePlanning(repoRoot);
+  if (planningStripped) {
+    gitignorePlanning(repoRoot);
+    run("git", ["rm", "-r", "--cached", "--ignore-unmatch", "--", ".planning"], repoRoot);
+    run("git", ["add", "--", ".gitignore"], repoRoot);
+    // Commit the staged INDEX as-is (the .planning removal + the .gitignore add) — NO pathspec. A pathspec'd
+    // `git commit -- .planning` does a PARTIAL commit that takes the working-tree state of .planning and re-adds
+    // it, undoing the `rm --cached`. The plain commit records exactly what's staged.
+    run("git", ["commit", "-m", "chore: exclude .planning from the public repo"], repoRoot);
+  }
 
   // CREATE + push (gh creates the remote, sets origin, pushes the current tree)
   const vis = mode === "public" ? "--public" : "--private";

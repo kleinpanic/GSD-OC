@@ -67,8 +67,10 @@ export function createWorkBranch(
     const r = spawnSync("git", a, { cwd: repoRoot, encoding: "utf8" });
     return r.status === 0 ? { ok: true } : { ok: false, err: (r.stderr || r.stdout || "").trim() };
   };
-  // if the branch exists, switch; else create from base (or HEAD). `--` guards the ref.
-  const exists = !opts.dryRun && spawnSync("git", ["rev-parse", "--verify", "--quiet", branch], { cwd: repoRoot }).status === 0;
+  // if the branch exists, switch; else create from base (or HEAD).
+  // D: `--` ends option parsing so a branch name beginning with `-` (hostile/typo config template) can't be read as
+  // a flag here — consistent with the `switch` calls below and the rest of the codebase's argv posture.
+  const exists = !opts.dryRun && spawnSync("git", ["rev-parse", "--verify", "--quiet", "--", branch], { cwd: repoRoot }).status === 0;
   const base = cfg.base_branch || "HEAD";
   // LOW-01: guard base against a "-flag" value; "--" ends option parsing for the create-from-base form.
   const res = exists ? run(["switch", "--", branch]) : run(["switch", "-c", branch, "--", base]);

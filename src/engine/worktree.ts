@@ -9,7 +9,18 @@
  * flag, and a `dryRun` seam returns the argv WITHOUT mutating a repo (unit-testable without git).
  */
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
+import { join } from "node:path";
+
+/** existsSync that never throws (perm errors swallowed) — for the MERGE_HEAD in-progress check. */
+function existsSyncSafe(p: string): boolean {
+  try {
+    return existsSync(p);
+  } catch {
+    return false;
+  }
+}
 
 export interface WorktreeOptions {
   /** Build argv and return it WITHOUT spawning git (test seam). */
@@ -63,8 +74,18 @@ export function createWorktree(
   const argv: string[][] = [];
   const base = opts.base ?? "HEAD";
   // `git worktree add -b gsd/<name> <path> <base>` — -b creates the branch; all values are discrete args.
-  const res = run(repoRoot, ["worktree", "add", "-b", branch, "--", wt, base], opts.dryRun, argv);
-  // Note: `--` before <path> guards a path that could look like a flag; <base> after is a ref, not a flag risk.
+  // `--` before <path> guards a path that could look like a flag; <base> after is a ref, not a flag risk.
+  let res = run(repoRoot, ["worktree", "add", "-b", branch, "--", wt, base], opts.dryRun, argv);
+  if (!res.ok && !opts.dryRun) {
+    // BLOCKER A: a stale worktree dir or orphan `gsd/<name>` branch from a PRIOR failed/leaked run makes
+    // `worktree add -b` fail permanently ("branch already exists" / "<dir> already exists") → the same-named unit
+    // dead-locks and never recovers. Reconcile the leftover (prune stale worktrees + force-remove the dir + delete
+    // the orphan branch) ONCE, then retry. The leftover is a failed prior attempt, so discarding it is correct.
+    run(repoRoot, ["worktree", "remove", "--force", "--", wt], false, argv);
+    run(repoRoot, ["worktree", "prune"], false, argv);
+    run(repoRoot, ["branch", "-D", branch], false, argv);
+    res = run(repoRoot, ["worktree", "add", "-b", branch, "--", wt, base], false, argv);
+  }
   return { argv, ok: res.ok, error: res.error, path: wt, branch };
 }
 
@@ -104,14 +125,24 @@ export function mergeAndRemoveWorktree(
   const mergeArgs = ["merge", opts.noFastForward === false ? "--ff" : "--no-ff", "--no-edit", branch];
   const merge = run(repoRoot, mergeArgs, opts.dryRun, argv);
   if (!merge.ok) {
-    // CONFLICT: abort so the base tree is left CLEAN (mid-merge state would corrupt the NEXT unit's merge).
-    // The unit's work survives on its branch `gsd/<name>` for resolution; only this unit fails.
-    run(repoRoot, ["merge", "--abort"], opts.dryRun, argv);
-    return { argv, ok: false, error: `merge ${branch} conflicted (work preserved on the branch; tree aborted clean): ${merge.error}` };
+    // BLOCKER B: abort ONLY when a merge is actually in progress (MERGE_HEAD exists) — a non-conflict failure
+    // (dirty tree, lock, untracked-overwrite) has no merge to abort, and the old code's unconditional `--abort`
+    // exited 128 while CLAIMING "tree aborted clean" (a lie). Remove the worktree dir either way so it doesn't
+    // leak (the work stays on the branch `gsd/<name>` for resolution; the checkout dir is disposable).
+    const inMerge = !opts.dryRun && existsSyncSafe(join(repoRoot, ".git", "MERGE_HEAD"));
+    if (inMerge) run(repoRoot, ["merge", "--abort"], opts.dryRun, argv);
+    run(repoRoot, ["worktree", "remove", "--force", "--", wt], opts.dryRun, argv);
+    return {
+      argv,
+      ok: false,
+      error: `merge ${branch} failed (work preserved on the branch ${branch}; ${inMerge ? "in-progress merge aborted, tree clean" : "no merge in progress"}): ${merge.error}`,
+    };
   }
-  run(repoRoot, ["worktree", "remove", "--force", "--", wt], opts.dryRun, argv);
-  run(repoRoot, ["branch", "-D", branch], opts.dryRun, argv);
-  return { argv, ok: true };
+  const rm = run(repoRoot, ["worktree", "remove", "--force", "--", wt], opts.dryRun, argv);
+  const del = run(repoRoot, ["branch", "-D", branch], opts.dryRun, argv);
+  // BLOCKER E: surface a cleanup failure instead of always reporting ok:true — a branch -D / worktree remove that
+  // fails (e.g. branch checked out elsewhere) was invisible and fed the next run's create dead-lock.
+  return { argv, ok: rm.ok && del.ok, error: rm.ok && del.ok ? undefined : `merged ok, but cleanup failed: ${rm.error ?? del.error}` };
 }
 
 /** Remove an isolation worktree WITHOUT merging (abort path) + delete its branch. */
@@ -119,7 +150,9 @@ export function removeWorktree(repoRoot: string, name: string, opts: WorktreeOpt
   assertSafeName(name);
   const wt = worktreePath(repoRoot, name);
   const argv: string[][] = [];
-  run(repoRoot, ["worktree", "remove", "--force", "--", wt], opts.dryRun, argv);
-  run(repoRoot, ["branch", "-D", `gsd/${name}`], opts.dryRun, argv);
-  return { argv, ok: true };
+  const rm = run(repoRoot, ["worktree", "remove", "--force", "--", wt], opts.dryRun, argv);
+  const del = run(repoRoot, ["branch", "-D", `gsd/${name}`], opts.dryRun, argv);
+  // BLOCKER E: report the real cleanup status (was always ok:true) so a leaked worktree/branch is visible to the
+  // caller instead of silently feeding the next createWorktree dead-lock.
+  return { argv, ok: rm.ok && del.ok, error: rm.ok && del.ok ? undefined : `worktree cleanup failed: ${rm.error ?? del.error}` };
 }

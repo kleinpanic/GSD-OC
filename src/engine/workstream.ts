@@ -12,6 +12,11 @@
 import fs from "node:fs";
 import path from "node:path";
 
+/** Escape regex-special chars so a workstream name read raw from disk can't break (or hijack) a RegExp. */
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /** Slugify a workstream name → lowercase, alphanumerics + single dashes, bounded. Rejects empty/traversal. */
 export function workstreamSlug(name: string): string {
   const slug = (name ?? "")
@@ -151,8 +156,10 @@ export function suggestWorkstream(intent: string, planningDir?: string): string 
   if (planningDir) {
     const existing = listWorkstreams(planningDir).map((w) => w.name);
     if (typed && existing.includes(typed)) return typed; // join the live track
-    // also: if the intent literally names an existing workstream, prefer it
-    for (const name of existing) if (new RegExp(`\\b${name}\\b`, "i").test(text)) return name;
+    // also: if the intent literally names an existing workstream, prefer it. ESCAPE the name — a workstream dir
+    // named with regex metachars (c++, a(b) is read raw from readdirSync and `new RegExp("\\bc++\\b")` throws an
+    // uncaught SyntaxError, crashing suggestion; unescaped `a.b` would also false-match.
+    for (const name of existing) if (new RegExp(`\\b${escapeRe(name)}\\b`, "i").test(text)) return name;
   }
   return typed;
 }
