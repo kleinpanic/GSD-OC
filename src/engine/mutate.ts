@@ -7,6 +7,7 @@
  * All mutations are atomic (readModifyWriteStateMd holds the lock across read→transform→write) and pure in
  * their transform (content string → content string), so the transforms are unit-testable without fs.
  */
+import fs from "node:fs";
 import path from "node:path";
 import { readModifyWriteStateMd, type Clock, realClock } from "./state.js";
 
@@ -192,4 +193,79 @@ export function addDecision(planningDir: string, decision: string, clock: Clock 
 /** state.add-blocker — append a blocker to the body Blockers log. */
 export function addBlocker(planningDir: string, blocker: string, clock: Clock = realClock): void {
   readModifyWriteStateMd(statePathOf(planningDir), (c) => stamp(appendUnderSection(c, "Blockers", `${nowIso(clock).slice(0, 10)} — ${blocker}`), clock), clock);
+}
+
+const BLOCKERS_SECTION_RE = /(###?\s*(?:Blockers|Blockers\/Concerns|Concerns)\s*\n)([\s\S]*?)(?=\n###?|\n##[^#]|$)/i;
+
+/** Pure transform: drop blocker list-items in the Blockers section whose text matches `needle` (case-insensitive). */
+export function removeBlockerLine(content: string, needle: string): { content: string; resolved: boolean } {
+  const match = content.match(BLOCKERS_SECTION_RE);
+  if (!match) return { content, resolved: false };
+  const lower = needle.toLowerCase();
+  const filtered = match[2].split("\n").filter((line) => !line.startsWith("- ") || !line.toLowerCase().includes(lower));
+  let newBody = filtered.join("\n");
+  if (!newBody.trim() || !newBody.includes("- ")) newBody = "None\n"; // section empty → placeholder
+  return { content: content.replace(BLOCKERS_SECTION_RE, (_m, header) => `${header}${newBody}`), resolved: true };
+}
+
+/** state.resolve-blocker — remove blocker lines matching `needle` from the Blockers section (mirror of add-blocker). */
+export function resolveBlocker(planningDir: string, needle: string, clock: Clock = realClock): boolean {
+  let resolved = false;
+  readModifyWriteStateMd(
+    statePathOf(planningDir),
+    (c) => {
+      const r = removeBlockerLine(c, needle);
+      resolved = r.resolved;
+      return resolved ? stamp(r.content, clock) : c;
+    },
+    clock,
+  );
+  return resolved;
+}
+
+export interface WaitingSignal {
+  status: "waiting";
+  type: string;
+  question: string | null;
+  options: string[];
+  since: string;
+  phase: string | null;
+}
+
+/**
+ * state.signal-waiting — write `.planning/WAITING.json` at a decision point so an external watcher
+ * (orchestrator / poller / fswatch) can detect the agent is blocked on the user. Fixes upstream #1034.
+ */
+export function signalWaiting(
+  planningDir: string,
+  opts: { type?: string; question?: string; options?: string; phase?: string } = {},
+  clock: Clock = realClock,
+): { signaled: boolean; path: string } {
+  const waitingPath = path.join(planningDir, "WAITING.json");
+  const signal: WaitingSignal = {
+    status: "waiting",
+    type: opts.type || "decision_point",
+    question: opts.question ?? null,
+    options: opts.options ? opts.options.split("|").map((o) => o.trim()).filter(Boolean) : [],
+    since: nowIso(clock),
+    phase: opts.phase ?? null,
+  };
+  fs.mkdirSync(planningDir, { recursive: true });
+  fs.writeFileSync(waitingPath, JSON.stringify(signal, null, 2));
+  return { signaled: true, path: waitingPath };
+}
+
+/** state.signal-resume — remove the WAITING.json signal once the user answers and the agent resumes. */
+export function signalResume(planningDir: string): { resumed: boolean; removed: boolean } {
+  const waitingPath = path.join(planningDir, "WAITING.json");
+  let removed = false;
+  try {
+    if (fs.existsSync(waitingPath)) {
+      fs.unlinkSync(waitingPath);
+      removed = true;
+    }
+  } catch {
+    /* best-effort */
+  }
+  return { resumed: true, removed };
 }

@@ -17,7 +17,7 @@ import { readGsdConfig, bootstrapGsdConfig, setGsdConfigKey } from "./engine/con
 import { resolveProfiledConfig, applySurfaceProfile, isSurfaceProfile } from "./engine/profile.js";
 import { route as routeEngine } from "./engine/route.js";
 import { enforceToolGate, enforceSpawnPersona, gsdProjectRoot } from "./hooks/enforce-gate.js";
-import { setStatus, recordProgress, addDecision, addBlocker } from "./engine/mutate.js";
+import { setStatus, recordProgress, addDecision, addBlocker, resolveBlocker, signalWaiting, signalResume } from "./engine/mutate.js";
 import { addPhase, scaffoldPhaseDir, updatePlanProgress, markPhaseComplete, markRequirementComplete, completeMilestone, milestoneSummary } from "./engine/lifecycle.js";
 import { scaffoldPlanning } from "./engine/scaffold.js";
 import { contextTemplate, artifactName } from "./engine/artifacts.js";
@@ -123,10 +123,11 @@ const commandParams = Type.Object(
 /** TypeBox schema for the gsd_state mutation tool (ENG-WRITE-01). */
 const stateParams = Type.Object(
   {
-    op: Type.Union([Type.Literal("init"), Type.Literal("branch"), Type.Literal("commit"), Type.Literal("progress"), Type.Literal("undo"), Type.Literal("set-status"), Type.Literal("record-progress"), Type.Literal("add-decision"), Type.Literal("add-blocker"), Type.Literal("add-phase"), Type.Literal("scaffold-phase"), Type.Literal("update-plan-progress"), Type.Literal("complete-phase"), Type.Literal("complete-requirement"), Type.Literal("complete-milestone"), Type.Literal("milestone-summary")], { description: "init | branch | commit | progress | undo | set-status | record-progress | add-decision | add-blocker | add-phase | scaffold-phase | update-plan-progress | complete-phase | complete-requirement | complete-milestone | milestone-summary" }),
+    op: Type.Union([Type.Literal("init"), Type.Literal("branch"), Type.Literal("commit"), Type.Literal("progress"), Type.Literal("undo"), Type.Literal("set-status"), Type.Literal("record-progress"), Type.Literal("add-decision"), Type.Literal("add-blocker"), Type.Literal("add-phase"), Type.Literal("scaffold-phase"), Type.Literal("update-plan-progress"), Type.Literal("complete-phase"), Type.Literal("complete-requirement"), Type.Literal("complete-milestone"), Type.Literal("milestone-summary"), Type.Literal("resolve-blocker"), Type.Literal("signal-waiting"), Type.Literal("signal-resume")], { description: "init | branch | commit | progress | undo | set-status | record-progress | add-decision | add-blocker | resolve-blocker | signal-waiting | signal-resume | add-phase | scaffold-phase | update-plan-progress | complete-phase | complete-requirement | complete-milestone | milestone-summary" }),
     status: Type.Optional(Type.String({ description: "For set-status (e.g. planning|executing|complete|error)." })),
     decision: Type.Optional(Type.String({ description: "For add-decision: the decision text." })),
-    blocker: Type.Optional(Type.String({ description: "For add-blocker: the blocker text." })),
+    blocker: Type.Optional(Type.String({ description: "For add-blocker: the blocker text. For resolve-blocker: text to match." })),
+    options: Type.Optional(Type.String({ description: "For signal-waiting: '|'-separated decision options." })),
     total_plans: Type.Optional(Type.Number()),
     completed_plans: Type.Optional(Type.Number()),
     total_phases: Type.Optional(Type.Number()),
@@ -544,7 +545,7 @@ const entry = definePluginEntry({
       description:
         "Advance GSD project state in .planning/STATE.md (op: set-status | record-progress | add-decision | add-blocker). Call this as GSD work completes so the route engine sees live state.",
       parameters: stateParams,
-      async execute(_toolCallId: string, args: { op?: string; status?: string; decision?: string; blocker?: string; total_plans?: number; completed_plans?: number; total_phases?: number; completed_phases?: number; name?: string; goal?: string; phase?: string; plans?: number; done?: number; req?: string; version?: string; create_repo?: boolean; kind?: string }, _signal?: unknown) {
+      async execute(_toolCallId: string, args: { op?: string; status?: string; decision?: string; blocker?: string; options?: string; total_plans?: number; completed_plans?: number; total_phases?: number; completed_phases?: number; name?: string; goal?: string; phase?: string; plans?: number; done?: number; req?: string; version?: string; create_repo?: boolean; kind?: string }, _signal?: unknown) {
         // Best-effort project resolution: walk up from cwd to a .planning root. The tool execute context
         // carries NO workspaceDir (SDK limit), so when cwd isn't the workspace (gateway home) this falls
         // back to cwd-relative .planning. The robust state-advance channel is agent_end (workspaceDir) — SDK-03.
@@ -564,6 +565,13 @@ const entry = definePluginEntry({
             case "add-blocker":
               if (!args.blocker) return { ok: false, error: "add-blocker requires non-empty blocker text" };
               addBlocker(dir, args.blocker); break;
+            case "resolve-blocker":
+              if (!args.blocker) return { ok: false, error: "resolve-blocker requires the blocker text to match" };
+              return { ok: true, op: args.op, resolved: resolveBlocker(dir, args.blocker) };
+            case "signal-waiting":
+              return { ok: true, op: args.op, ...signalWaiting(dir, { type: args.kind, question: args.goal, options: args.options, phase: args.phase }) };
+            case "signal-resume":
+              return { ok: true, op: args.op, ...signalResume(dir) };
             // OCT-W1 write-engine ops (phase/roadmap/milestone/requirements CRUD):
             case "init": {
               fs.mkdirSync(dir, { recursive: true });

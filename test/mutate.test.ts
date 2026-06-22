@@ -6,7 +6,9 @@ import { join } from "node:path";
 import {
   setFrontmatterField, setProgressFields, appendUnderSection,
   setStatus, recordProgress, addDecision, addBlocker,
+  removeBlockerLine, resolveBlocker, signalWaiting, signalResume,
 } from "../src/engine/mutate.js";
+import { existsSync } from "node:fs";
 
 const FM = "---\nstatus: planning\nprogress:\n  total_plans: 4\n  completed_plans: 1\n  percent: 25\n---\n\n# Project State\n";
 
@@ -68,6 +70,51 @@ test("addDecision + addBlocker append dated entries", () => {
     const s = read();
     assert.match(s, /## Decisions\n\n- \d{4}-\d{2}-\d{2} — use spark embeddings/);
     assert.match(s, /## Blockers\n\n- \d{4}-\d{2}-\d{2} — gateway runtime gap/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("removeBlockerLine drops matching blocker lines + placeholders an empty section", () => {
+  const c = "# State\n\n## Blockers\n\n- spark tunnel down\n- gateway runtime gap\n\n## Next\n";
+  const one = removeBlockerLine(c, "spark");
+  assert.equal(one.resolved, true);
+  assert.doesNotMatch(one.content, /spark tunnel/);
+  assert.match(one.content, /gateway runtime gap/);
+  // removing the last blocker → "None" placeholder, section preserved
+  const empty = removeBlockerLine(one.content, "gateway");
+  assert.match(empty.content, /## Blockers\n\nNone/);
+  // no Blockers section → resolved:false, content unchanged
+  const none = removeBlockerLine("# State\n\n## Next\n", "x");
+  assert.equal(none.resolved, false);
+});
+
+test("resolveBlocker removes a live blocker (mirror of addBlocker)", () => {
+  const { dir, read } = tmpState();
+  try {
+    addBlocker(dir, "gateway runtime gap");
+    assert.match(read(), /gateway runtime gap/);
+    assert.equal(resolveBlocker(dir, "gateway runtime"), true);
+    assert.doesNotMatch(read(), /gateway runtime gap/);
+    assert.equal(resolveBlocker(dir, "nonexistent"), true, "section exists → resolved:true even if no line matched");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("signalWaiting writes WAITING.json; signalResume removes it", () => {
+  const { dir } = tmpState();
+  try {
+    const clk = { now: () => Date.parse("2026-06-21T00:00:00Z"), sleep: () => {} };
+    const r = signalWaiting(dir, { type: "checkpoint", question: "ship?", options: "yes|no", phase: "2" }, clk);
+    assert.equal(r.signaled, true);
+    const sig = JSON.parse(readFileSync(join(dir, "WAITING.json"), "utf8"));
+    assert.equal(sig.status, "waiting");
+    assert.equal(sig.type, "checkpoint");
+    assert.deepEqual(sig.options, ["yes", "no"]);
+    assert.equal(sig.phase, "2");
+    assert.equal(sig.since, "2026-06-21T00:00:00.000Z");
+    // resume removes it
+    assert.deepEqual(signalResume(dir), { resumed: true, removed: true });
+    assert.equal(existsSync(join(dir, "WAITING.json")), false);
+    // idempotent: resume when absent → removed:false
+    assert.deepEqual(signalResume(dir), { resumed: true, removed: false });
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
