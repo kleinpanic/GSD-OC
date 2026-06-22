@@ -7,6 +7,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { type Clock, realClock } from "./state.js";
 
 export const INTEL_FILES = {
@@ -184,4 +185,138 @@ export function intelExtractExports(filePath: string): ExtractExportsResult {
   else if (hadEsm && !hadCjs) method = "esm";
 
   return { file: filePath, exports, method };
+}
+
+// ─── Write / snapshot side (the intel refresh baseline) ──────────────────────
+
+function hashFile(filePath: string): string | null {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    return crypto.createHash("sha256").update(fs.readFileSync(filePath, "utf8")).digest("hex");
+  } catch {
+    return null;
+  }
+}
+
+const REFRESH_SNAPSHOT = ".last-refresh.json";
+
+/** Diff current intel files vs the `.last-refresh.json` content-hash snapshot (changed/added/removed). */
+export function intelDiff(planningDir: string): { changed: string[]; added: string[]; removed: string[] } | { no_baseline: true } | { disabled: true; message: string } {
+  if (!isIntelEnabled(planningDir)) return disabledResponse();
+  const snapshot = safeReadJson<{ hashes?: Record<string, string> }>(intelFilePath(planningDir, REFRESH_SNAPSHOT));
+  if (!snapshot) return { no_baseline: true };
+  const prev = snapshot.hashes ?? {};
+  const changed: string[] = [],
+    added: string[] = [],
+    removed: string[] = [];
+  for (const filename of Object.values(INTEL_FILES)) {
+    const cur = hashFile(intelFilePath(planningDir, filename));
+    if (cur && !prev[filename]) added.push(filename);
+    else if (cur && prev[filename] && cur !== prev[filename]) changed.push(filename);
+    else if (!cur && prev[filename]) removed.push(filename);
+  }
+  return { changed, added, removed };
+}
+
+/** Save a refresh snapshot: content-hashes of all current intel files (the diff baseline). */
+export function intelSnapshot(planningDir: string, clock: Pick<Clock, "now"> = realClock): { saved: true; timestamp: string; files: number } | { disabled: true; message: string } {
+  if (!isIntelEnabled(planningDir)) return disabledResponse();
+  const intelPath = path.join(planningDir, "intel");
+  fs.mkdirSync(intelPath, { recursive: true });
+  const hashes: Record<string, string> = {};
+  let files = 0;
+  for (const filename of Object.values(INTEL_FILES)) {
+    const h = hashFile(path.join(intelPath, filename));
+    if (h) {
+      hashes[filename] = h;
+      files++;
+    }
+  }
+  const timestamp = new Date(clock.now()).toISOString();
+  fs.writeFileSync(path.join(intelPath, REFRESH_SNAPSHOT), JSON.stringify({ hashes, timestamp, version: 1 }, null, 2));
+  return { saved: true, timestamp, files };
+}
+
+/** Refresh is performed by an agent (gsd-intel-updater) — return the spawn directive. */
+export function intelUpdate(planningDir: string): { action: "spawn_agent"; message: string } | { disabled: true; message: string } {
+  if (!isIntelEnabled(planningDir)) return disabledResponse();
+  return { action: "spawn_agent", message: "spawn gsd-intel-updater agent for a full intel refresh" };
+}
+
+/** Bump `_meta.updated_at` + `_meta.version` on a single intel file (the post-edit stamp). Does NOT gate. */
+export function intelPatchMeta(filePath: string, clock: Pick<Clock, "now"> = realClock): { patched: boolean; file?: string; timestamp?: string; error?: string } {
+  try {
+    if (!fs.existsSync(filePath)) return { patched: false, error: `File not found: ${filePath}` };
+    let data: { _meta?: { updated_at?: string; version?: number } };
+    try {
+      data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    } catch (e) {
+      return { patched: false, error: `Invalid JSON: ${e instanceof Error ? e.message : String(e)}` };
+    }
+    data._meta ??= {};
+    const timestamp = new Date(clock.now()).toISOString();
+    data._meta.updated_at = timestamp;
+    data._meta.version = (data._meta.version ?? 0) + 1;
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + "\n");
+    return { patched: true, file: filePath, timestamp };
+  } catch (e) {
+    return { patched: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export interface IntelValidateResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+/** Validate intel files: existence, JSON parse, _meta recency, and per-file field shape (files exports, deps fields). */
+export function intelValidate(planningDir: string, clock: Pick<Clock, "now"> = realClock): IntelValidateResult | { disabled: true; message: string } {
+  if (!isIntelEnabled(planningDir)) return disabledResponse();
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const STALE_MS = 24 * 60 * 60 * 1000;
+  const now = clock.now();
+
+  for (const [key, filename] of Object.entries(INTEL_FILES)) {
+    const filePath = intelFilePath(planningDir, filename);
+    if (!fs.existsSync(filePath)) {
+      errors.push(`${filename}: file does not exist`);
+      continue;
+    }
+    let data: { _meta?: { updated_at?: string }; entries?: Record<string, { exports?: unknown; version?: unknown; type?: unknown; used_by?: unknown }> };
+    try {
+      data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    } catch (e) {
+      errors.push(`${filename}: invalid JSON — ${e instanceof Error ? e.message : String(e)}`);
+      continue;
+    }
+    if (data._meta?.updated_at) {
+      const age = now - new Date(data._meta.updated_at).getTime();
+      if (age > STALE_MS) warnings.push(`${filename}: _meta.updated_at is ${Math.round(age / 3600000)} hours old (>24 hr)`);
+    } else {
+      warnings.push(`${filename}: missing _meta.updated_at`);
+    }
+    if (data.entries && typeof data.entries === "object") {
+      if (key === "files") {
+        for (const [entryPath, entry] of Object.entries(data.entries)) {
+          if (Array.isArray(entry.exports))
+            for (const exp of entry.exports)
+              if (typeof exp === "string" && exp.includes(" ")) warnings.push(`${filename}: "${entryPath}" export "${exp}" looks like a description (contains space)`);
+        }
+        for (const ep of Object.keys(data.entries).slice(0, 5))
+          if (!fs.existsSync(ep)) warnings.push(`${filename}: entry path "${ep}" does not exist on disk`);
+      }
+      if (key === "deps") {
+        for (const [depName, entry] of Object.entries(data.entries)) {
+          const missing: string[] = [];
+          if (!entry.version) missing.push("version");
+          if (!entry.type) missing.push("type");
+          if (!entry.used_by) missing.push("used_by");
+          if (missing.length > 0) warnings.push(`${filename}: "${depName}" missing fields: ${missing.join(", ")}`);
+        }
+      }
+    }
+  }
+  return { valid: errors.length === 0, errors, warnings };
 }

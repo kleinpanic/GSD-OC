@@ -2,7 +2,8 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { isIntelEnabled, intelQuery, intelStatus, intelExtractExports, INTEL_FILES } from "../src/engine/intel.js";
+import { readFileSync } from "node:fs";
+import { isIntelEnabled, intelQuery, intelStatus, intelExtractExports, intelDiff, intelSnapshot, intelValidate, intelPatchMeta, INTEL_FILES } from "../src/engine/intel.js";
 import { scratchDir, cleanupAllScratch } from "./helpers/scratch.js";
 
 after(cleanupAllScratch);
@@ -68,4 +69,49 @@ test("intelExtractExports handles CJS module.exports, exports.X, ESM, and mixed"
   assert.equal(intelExtractExports(mixed).method, "mixed");
 
   assert.deepEqual(intelExtractExports(join(d, "nope.js")), { file: join(d, "nope.js"), exports: [], method: "none" });
+});
+
+test("intelSnapshot → intelDiff detects changed/added/removed via content hashes", () => {
+  const d = enabledIntel();
+  const stack = join(d, "intel", INTEL_FILES.stack);
+  writeFileSync(stack, JSON.stringify({ _meta: {}, entries: { node: "22" } }));
+  // no baseline yet
+  assert.equal((intelDiff(d) as { no_baseline?: boolean }).no_baseline, true);
+  // snapshot, then mutate stack + add a new file
+  const snap = intelSnapshot(d, { now: () => Date.now() }) as { files: number };
+  assert.equal(snap.files, 1);
+  writeFileSync(stack, JSON.stringify({ _meta: {}, entries: { node: "24" } })); // changed
+  writeFileSync(join(d, "intel", INTEL_FILES.deps), JSON.stringify({ entries: {} })); // added
+  const diff = intelDiff(d) as { changed: string[]; added: string[]; removed: string[] };
+  assert.deepEqual(diff.changed, [INTEL_FILES.stack]);
+  assert.deepEqual(diff.added, [INTEL_FILES.deps]);
+});
+
+test("intelPatchMeta bumps updated_at + version; errors on missing/invalid", () => {
+  const d = enabledIntel();
+  const f = join(d, "intel", INTEL_FILES.apis);
+  writeFileSync(f, JSON.stringify({ entries: {} }));
+  const r = intelPatchMeta(f, { now: () => Date.parse("2026-06-21T00:00:00Z") });
+  assert.equal(r.patched, true);
+  const data = JSON.parse(readFileSync(f, "utf8"));
+  assert.equal(data._meta.version, 1);
+  assert.equal(data._meta.updated_at, "2026-06-21T00:00:00.000Z");
+  // second patch bumps version
+  intelPatchMeta(f, { now: () => Date.now() });
+  assert.equal(JSON.parse(readFileSync(f, "utf8"))._meta.version, 2);
+  assert.equal(intelPatchMeta(join(d, "missing.json")).patched, false);
+});
+
+test("intelValidate flags missing files, stale meta, and space-y exports", () => {
+  const d = enabledIntel();
+  // files.json with a description-looking export (space) + fresh meta
+  writeFileSync(
+    join(d, "intel", INTEL_FILES.files),
+    JSON.stringify({ _meta: { updated_at: "2026-06-21T00:00:00Z" }, entries: { "x.ts": { exports: ["good", "looks like prose"] } } }),
+  );
+  const v = intelValidate(d, { now: () => Date.parse("2026-06-21T01:00:00Z") }) as { valid: boolean; errors: string[]; warnings: string[] };
+  // the other 4 intel files are missing → errors → not valid
+  assert.equal(v.valid, false);
+  assert.ok(v.errors.some((e) => e.includes("does not exist")));
+  assert.ok(v.warnings.some((w) => w.includes("looks like a description")));
 });
