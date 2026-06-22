@@ -85,3 +85,40 @@ export function pruneLearnings(keep: number, opts: { root?: string } = {}): numb
   fs.writeFileSync(learningsPath(opts.root), kept.map((l) => JSON.stringify(l)).join("\n") + "\n");
   return all.length - kept.length;
 }
+
+/** Delete entries whose text contains `needle` (case-insensitive). Returns the removed count. */
+export function deleteLearnings(needle: string, opts: { root?: string } = {}): number {
+  const lower = (needle ?? "").toLowerCase();
+  if (!lower) return 0;
+  const all = listLearnings(opts);
+  const kept = all.filter((l) => !l.text.toLowerCase().includes(lower));
+  if (kept.length === all.length) return 0;
+  fs.writeFileSync(learningsPath(opts.root), kept.length ? kept.map((l) => JSON.stringify(l)).join("\n") + "\n" : "");
+  return all.length - kept.length;
+}
+
+/**
+ * learnings.copy — harvest a project's `.planning/LEARNINGS.md` into the cross-project store (the extract-learnings
+ * → global-store bridge). Splits on `## ` headings: heading = context/tags, body = the learning text. Native port
+ * of upstream learningsCopyFromProject (adapted to the JSONL store). Returns {total, created}.
+ */
+export function copyLearningsFromProject(planningDir: string, opts: { root?: string; now?: string; sourceProject?: string } = {}): { total: number; created: number } {
+  let content: string;
+  try {
+    content = fs.readFileSync(path.join(planningDir, "LEARNINGS.md"), "utf8");
+  } catch {
+    return { total: 0, created: 0 };
+  }
+  const sourceProject = opts.sourceProject || path.basename(path.resolve(planningDir, ".."));
+  let created = 0;
+  for (const section of content.split(/^## /m).slice(1)) {
+    const lines = section.trim().split("\n");
+    const title = lines[0].trim();
+    const body = lines.slice(1).join("\n").trim();
+    if (!body) continue;
+    const tags = title.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+    addLearning({ kind: "lesson", text: body, tags: tags.slice(0, 8), project: sourceProject }, opts);
+    created++;
+  }
+  return { total: created, created };
+}

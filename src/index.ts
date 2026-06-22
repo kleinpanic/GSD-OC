@@ -37,7 +37,7 @@ import { intelQuery, intelStatus, intelExtractExports, intelDiff, intelSnapshot,
 import { verifyPlanStructure, verifyReferences } from "./engine/verify-plan.js";
 import { pauseWork, resumeWork, writeThread, listThreads, closeThread, capture } from "./engine/session.js";
 import { buildCheckpoint, renderCheckpointDiscord, parseCheckpointReply, type CheckpointType, type GateOption } from "./engine/checkpoint.js";
-import { addLearning, queryLearnings, pruneLearnings } from "./engine/learnings.js";
+import { addLearning, queryLearnings, pruneLearnings, deleteLearnings, copyLearningsFromProject } from "./engine/learnings.js";
 import { scanInjection } from "./engine/security.js";
 import { suggestFlags } from "./orchestrate/flags.js";
 import { VERB_TO_SUBAGENT } from "./orchestrate/execute-path.js";
@@ -64,9 +64,9 @@ const LEARNINGS_TOOL = "gsd_learnings";
 /** TypeBox schema for gsd_learnings — cross-project knowledge store (add/query/prune). */
 const learningsParams = Type.Object(
   {
-    op: Type.Union([Type.Literal("add"), Type.Literal("query"), Type.Literal("prune")], { description: "add | query | prune" }),
+    op: Type.Union([Type.Literal("add"), Type.Literal("query"), Type.Literal("prune"), Type.Literal("copy"), Type.Literal("delete")], { description: "add | query | prune | copy | delete" }),
     kind: Type.Optional(Type.String({ description: "decision | lesson | pattern (for add/query)." })),
-    text: Type.Optional(Type.String({ description: "For add: the learning; for query: the search text." })),
+    text: Type.Optional(Type.String({ description: "For add: the learning; for query: search text; for delete: text to match." })),
     tags: Type.Optional(Type.Array(Type.String())),
     tag: Type.Optional(Type.String({ description: "For query: filter by tag." })),
     keep: Type.Optional(Type.Number({ description: "For prune: how many recent entries to keep." })),
@@ -807,6 +807,13 @@ const entry = definePluginEntry({
               return { ok: true, results: queryLearnings({ text: args.text, kind: args.kind as never, tag: args.tag }) };
             case "prune":
               return { ok: true, removed: pruneLearnings(args.keep ?? 200) };
+            case "copy": {
+              const root = gsdProjectRoot(process.cwd());
+              return { ok: true, ...copyLearningsFromProject(root ? `${root}/.planning` : ".planning") };
+            }
+            case "delete":
+              if (!args.text) return { ok: false, error: "delete requires text to match" };
+              return { ok: true, removed: deleteLearnings(args.text) };
             default: return { ok: false, error: "unknown op: " + args?.op };
           }
         } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
