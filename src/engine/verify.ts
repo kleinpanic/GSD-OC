@@ -35,6 +35,28 @@ export function roadmapPhases(planningDir: string): { number: string; name: stri
 }
 
 /**
+ * roadmap get-phase — extract a single phase's section (from its `### Phase N:` heading up to the next
+ * `### Phase` / `##` heading) out of ROADMAP.md. Single-milestone path (the common case). Returns the section
+ * text + name, or { found:false }.
+ */
+export function getRoadmapPhase(planningDir: string, phaseNum: string | number): { found: true; phase_number: string; name: string; section: string } | { found: false; phase_number: string } {
+  const num = String(phaseNum).trim();
+  const content = read(planningDir, "ROADMAP.md");
+  const want = num.replace(/\./g, "\\.");
+  // Heading line for this exact phase number.
+  const headingRe = new RegExp(`^#{2,4}[ \\t]*Phase[ \\t]+${want}[ \\t]*:[ \\t]*([^\\n]*)$`, "im");
+  const m = content ? headingRe.exec(content) : null;
+  if (!content || !m) return { found: false, phase_number: num };
+  const start = m.index;
+  // Section ends at the next phase heading or a top-level `## ` heading after the start.
+  const rest = content.slice(start + m[0].length);
+  const nextRe = /^#{2,4}[ \t]*Phase[ \t]+\d|^##[ \t]+(?!#)/im;
+  const nm = nextRe.exec(rest);
+  const end = nm ? start + m[0].length + nm.index : content.length;
+  return { found: true, phase_number: num, name: m[1].trim(), section: content.slice(start, end).trimEnd() };
+}
+
+/**
  * validate-artifacts gate — the write-guarantee. Checks each scaffolded artifact parses to what route()/
  * readState need. Returns the structured defect list so a writer can be re-dispatched with the exact gap.
  */

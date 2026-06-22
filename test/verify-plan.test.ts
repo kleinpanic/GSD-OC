@@ -2,7 +2,9 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { verifyPlanStructure, verifyReferences } from "../src/engine/verify-plan.js";
+import { execFileSync } from "node:child_process";
+import { verifyPlanStructure, verifyReferences, verifyCommits } from "../src/engine/verify-plan.js";
+import { getRoadmapPhase } from "../src/engine/verify.js";
 import { scratchDir, cleanupAllScratch } from "./helpers/scratch.js";
 
 after(cleanupAllScratch);
@@ -76,4 +78,39 @@ test("verifyReferences: skips urls + template vars", () => {
   writeFileSync(join(d, "DOC.md"), "`https://x.com/a.js` and `${VAR}/x.ts` should be skipped\n");
   const r = verifyReferences("DOC.md", d) as { total: number };
   assert.equal(r.total, 0, "no real refs counted");
+});
+
+test("verifyCommits classifies real vs bogus hashes", () => {
+  const d = scratchDir("vc");
+  const git = (...a: string[]) => execFileSync("git", a, { cwd: d, encoding: "utf8" }).trim();
+  git("init", "-q");
+  git("config", "user.email", "t@t.t");
+  git("config", "user.name", "t");
+  git("config", "commit.gpgsign", "false");
+  writeFileSync(join(d, "f.txt"), "x");
+  git("add", "f.txt");
+  git("commit", "-q", "-m", "init");
+  const head = git("rev-parse", "HEAD");
+  const r = verifyCommits(d, [head, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"]);
+  assert.deepEqual(r.valid, [head]);
+  assert.deepEqual(r.invalid, ["deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"]);
+  assert.equal(r.all_valid, false);
+});
+
+test("getRoadmapPhase extracts a single phase section + handles decimals + not-found", () => {
+  const d = scratchDir("grp");
+  mkdirSync(join(d, ".planning"), { recursive: true });
+  writeFileSync(
+    join(d, ".planning", "ROADMAP.md"),
+    "# Roadmap\n\n### Phase 1: Foundations\n**Goal:** core\n\n### Phase 2.5: Hotfix\n**Goal:** patch\n\n### Phase 3: Polish\n**Goal:** ship\n",
+  );
+  const p = join(d, ".planning");
+  const one = getRoadmapPhase(p, 1) as { found: boolean; name: string; section: string };
+  assert.equal(one.found, true);
+  assert.equal(one.name, "Foundations");
+  assert.match(one.section, /\*\*Goal:\*\* core/);
+  assert.doesNotMatch(one.section, /Phase 2\.5/, "section stops at the next phase heading");
+  const dec = getRoadmapPhase(p, "2.5") as { found: boolean; name: string };
+  assert.equal(dec.name, "Hotfix");
+  assert.equal((getRoadmapPhase(p, 9) as { found: boolean }).found, false);
 });

@@ -6,6 +6,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 function safeRead(p: string): string | null {
   try {
@@ -114,4 +115,28 @@ export function verifyReferences(filePath: string, repoRoot = process.cwd(), hom
   }
 
   return { valid: missing.length === 0, found: found.length, missing, total: found.length + missing.length };
+}
+
+export interface VerifyCommitsResult {
+  all_valid: boolean;
+  valid: string[];
+  invalid: string[];
+  total: number;
+}
+
+/** Check each hash resolves to a real commit object (`git cat-file -t` === "commit"). */
+export function verifyCommits(repoRoot: string, hashes: string[]): VerifyCommitsResult {
+  const valid: string[] = [];
+  const invalid: string[] = [];
+  for (const hash of hashes) {
+    let ok = false;
+    try {
+      const r = spawnSync("git", ["cat-file", "-t", hash], { cwd: repoRoot, encoding: "utf8" });
+      ok = r.status === 0 && (r.stdout ?? "").trim() === "commit";
+    } catch {
+      ok = false;
+    }
+    (ok ? valid : invalid).push(hash);
+  }
+  return { all_valid: invalid.length === 0, valid, invalid, total: hashes.length };
 }

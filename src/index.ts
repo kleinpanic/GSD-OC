@@ -28,13 +28,13 @@ import { createAutoRepo, type RepoMode } from "./engine/repo.js";
 import { createWorkBranch } from "./engine/branch.js";
 import { resolveReviewer, crossAiReview, type ReviewFinding } from "./orchestrate/cross-ai-review.js";
 import path from "node:path";
-import { validateArtifacts, verifyPhaseCompleteness, validateConsistency, validateHealth, gapCheck } from "./engine/verify.js";
+import { validateArtifacts, verifyPhaseCompleteness, validateConsistency, validateHealth, gapCheck, getRoadmapPhase } from "./engine/verify.js";
 import { scanUat, auditOpen } from "./engine/audit.js";
 import { projectStats } from "./engine/stats.js";
 import { codebaseDrift } from "./engine/drift.js";
 import { graphifyQuery, graphifyStatus, graphifyDiff } from "./engine/graphify.js";
 import { intelQuery, intelStatus, intelExtractExports, intelDiff, intelSnapshot, intelValidate, intelUpdate, intelPatchMeta } from "./engine/intel.js";
-import { verifyPlanStructure, verifyReferences } from "./engine/verify-plan.js";
+import { verifyPlanStructure, verifyReferences, verifyCommits } from "./engine/verify-plan.js";
 import { pauseWork, resumeWork, writeThread, listThreads, closeThread, capture } from "./engine/session.js";
 import { buildCheckpoint, renderCheckpointDiscord, parseCheckpointReply, type CheckpointType, type GateOption } from "./engine/checkpoint.js";
 import { addLearning, queryLearnings, pruneLearnings, deleteLearnings, copyLearningsFromProject } from "./engine/learnings.js";
@@ -92,11 +92,12 @@ const sessionParams = Type.Object(
 /** TypeBox schema for gsd_verify — native integrity checks (validate-artifacts gate + verify/validate verbs). */
 const verifyParams = Type.Object(
   {
-    op: Type.Union([Type.Literal("validate-artifacts"), Type.Literal("phase-completeness"), Type.Literal("consistency"), Type.Literal("gap"), Type.Literal("uat"), Type.Literal("audit-open"), Type.Literal("stats"), Type.Literal("codebase-drift"), Type.Literal("graphify-query"), Type.Literal("graphify-status"), Type.Literal("graphify-diff"), Type.Literal("intel-query"), Type.Literal("intel-status"), Type.Literal("intel-exports"), Type.Literal("intel-diff"), Type.Literal("intel-snapshot"), Type.Literal("intel-validate"), Type.Literal("intel-update"), Type.Literal("intel-patch-meta"), Type.Literal("plan-structure"), Type.Literal("references"), Type.Literal("health")], { description: "validate-artifacts | phase-completeness | consistency | gap | uat | audit-open | stats | codebase-drift | graphify-query | graphify-status | graphify-diff | intel-query | intel-status | intel-exports | intel-diff | intel-snapshot | intel-validate | intel-update | intel-patch-meta | plan-structure | references | health" }),
+    op: Type.Union([Type.Literal("validate-artifacts"), Type.Literal("phase-completeness"), Type.Literal("consistency"), Type.Literal("gap"), Type.Literal("uat"), Type.Literal("audit-open"), Type.Literal("stats"), Type.Literal("codebase-drift"), Type.Literal("graphify-query"), Type.Literal("graphify-status"), Type.Literal("graphify-diff"), Type.Literal("intel-query"), Type.Literal("intel-status"), Type.Literal("intel-exports"), Type.Literal("intel-diff"), Type.Literal("intel-snapshot"), Type.Literal("intel-validate"), Type.Literal("intel-update"), Type.Literal("intel-patch-meta"), Type.Literal("plan-structure"), Type.Literal("references"), Type.Literal("commits"), Type.Literal("roadmap-phase"), Type.Literal("health")], { description: "validate-artifacts | phase-completeness | consistency | gap | uat | audit-open | stats | codebase-drift | graphify-query | graphify-status | graphify-diff | intel-query | intel-status | intel-exports | intel-diff | intel-snapshot | intel-validate | intel-update | intel-patch-meta | plan-structure | references | commits | roadmap-phase | health" }),
     phase: Type.Optional(Type.String({ description: "Phase number (for phase-completeness)." })),
     term: Type.Optional(Type.String({ description: "Search term (for graphify-query / intel-query)." })),
     budget: Type.Optional(Type.Number({ description: "Optional token budget cap (for graphify-query)." })),
-    file: Type.Optional(Type.String({ description: "Source file path (for intel-exports)." })),
+    file: Type.Optional(Type.String({ description: "Source file path (for intel-exports / plan-structure / references)." })),
+    hashes: Type.Optional(Type.Array(Type.String(), { description: "Commit hashes (for commits)." })),
   },
   { additionalProperties: false },
 );
@@ -690,7 +691,7 @@ const entry = definePluginEntry({
       description:
         "Run native GSD integrity checks (op: validate-artifacts | phase-completeness | consistency | health). Returns {ok, defects[]} — validate-artifacts is the write-guarantee gate (an artifact is valid iff route() can drive it).",
       parameters: verifyParams,
-      async execute(_toolCallId: string, args: { op?: string; phase?: string; term?: string; budget?: number; file?: string }, _signal?: unknown) {
+      async execute(_toolCallId: string, args: { op?: string; phase?: string; term?: string; budget?: number; file?: string; hashes?: string[] }, _signal?: unknown) {
         const root = gsdProjectRoot(process.cwd());
         const base = root ? `${root}/.planning` : ".planning";
         const dir = resolveWorkstreamDir(base);
@@ -734,6 +735,12 @@ const entry = definePluginEntry({
             case "references":
               if (!args.file) return { ok: false, error: "references requires file" };
               return { ok: true, ...verifyReferences(args.file, root ?? process.cwd()) };
+            case "commits":
+              if (!args.hashes?.length) return { ok: false, error: "commits requires a non-empty hashes array" };
+              return { ok: true, ...verifyCommits(root ?? process.cwd(), args.hashes) };
+            case "roadmap-phase":
+              if (!args.phase) return { ok: false, error: "roadmap-phase requires phase" };
+              return { ok: true, ...getRoadmapPhase(dir, args.phase) };
             case "health": return validateHealth(dir);
             default: return { ok: false, error: `unknown op: ${args?.op}` };
           }
