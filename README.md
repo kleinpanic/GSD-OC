@@ -4,7 +4,7 @@
 Turns a coding/big-work prompt into a driven, *enforced* GSD lifecycle — research → map → plan →
 execute → code-review → verify → ship — for **any** OpenClaw agent, **without typing a single `/command`**.
 
-![tests](https://img.shields.io/badge/tests-461%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-536%20passing-brightgreen)
 ![node](https://img.shields.io/badge/node-%3E%3D22-blue)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![discord slots](https://img.shields.io/badge/discord%20slash%20slots-0-success)
@@ -49,10 +49,11 @@ A prompt like *"add OAuth login"* auto-engages, retrieves the relevant skills, e
 ## Quick start
 
 ```bash
-npm install
+npm ci                        # Node ≥ 22
+npm run typecheck             # strict tsc over src + test (no emit)
 npm run build                 # tsc → dist/ (ESM) + bundles corpus/vectors for self-contained runtime
-npm test                      # 461 tests (node:test)
-npx openclaw plugins build    # generates openclaw.plugin.json
+npm test                      # 536 tests (node:test)
+npx openclaw plugins build --check  # openclaw.plugin.json is committed; this checks it is current
 npx openclaw plugins validate # → "Plugin gsd-oc is valid."
 ```
 

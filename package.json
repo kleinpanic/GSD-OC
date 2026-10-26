@@ -19,6 +19,7 @@
   ],
   "scripts": {
     "build": "tsc && node scripts/copy-artifacts.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "build:corpus": "node --experimental-strip-types scripts/build-corpus.ts",
     "build:vectors": "node --experimental-strip-types scripts/build-vectors.ts",
     "sync:check": "node --experimental-strip-types scripts/sync-upstream.ts --check",
