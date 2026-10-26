@@ -40,7 +40,10 @@ function activeFile(planningDir: string): string {
 export function activeWorkstream(planningDir: string): string | null {
   try {
     const slug = fs.readFileSync(activeFile(planningDir), "utf8").trim();
-    return slug && fs.existsSync(path.join(workstreamsRoot(planningDir), slug)) ? slug : null;
+    // `.active` is on-disk (repo) content: only accept a real slug, so a crafted `../../x` can't redirect every
+    // state write outside `.planning/workstreams/`.
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return null;
+    return fs.existsSync(path.join(workstreamsRoot(planningDir), slug)) ? slug : null;
   } catch {
     return null;
   }
@@ -132,11 +135,13 @@ export function completeWorkstream(planningDir: string, name: string): { archive
   const slug = workstreamSlug(name);
   const dir = path.join(workstreamsRoot(planningDir), slug);
   if (!fs.existsSync(dir)) return { archived: false, slug };
+  // Read BEFORE the move: activeWorkstream() requires the dir to exist, so after the rename it is always null.
+  const wasActive = activeWorkstream(planningDir) === slug;
   const archiveDir = path.join(workstreamsRoot(planningDir), ".archive");
   fs.mkdirSync(archiveDir, { recursive: true });
   fs.renameSync(dir, path.join(archiveDir, slug));
   let promoted: string | null = null;
-  if (activeWorkstream(planningDir) === slug) {
+  if (wasActive) {
     // #8: completing the ACTIVE track must not orphan other live tracks. Promote the next remaining workstream to
     // active (so route()/state keep operating on a real track); only clear `.active` (→ root .planning) if none remain.
     const remaining = listWorkstreams(planningDir).map((w) => workstreamSlug(w.name)).filter((s) => s !== slug);
