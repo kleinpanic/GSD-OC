@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, existsSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, existsSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -50,6 +50,32 @@ test("complete archives + clears active", () => {
     assert.ok(existsSync(join(p, "workstreams", ".archive", "auth")), "moved to .archive");
     assert.ok(!existsSync(join(p, "workstreams", "auth")), "removed from active set");
     assert.equal(activeWorkstream(p), null, "active cleared");
+  } finally { rmSync(join(p, ".."), { recursive: true, force: true }); }
+});
+
+test("complete of the ACTIVE track promotes the next remaining workstream", () => {
+  const p = tmpPlanning();
+  try {
+    createWorkstream(p, "auth"); // first → active
+    createWorkstream(p, "ui");
+    assert.equal(activeWorkstream(p), "auth");
+    const r = completeWorkstream(p, "auth");
+    assert.equal(r.promoted, "ui", "next live track promoted");
+    assert.equal(activeWorkstream(p), "ui");
+    assert.equal(resolveWorkstreamDir(p), join(p, "workstreams", "ui"));
+  } finally { rmSync(join(p, ".."), { recursive: true, force: true }); }
+});
+
+test("a crafted .active (path traversal) is ignored — state never resolves outside .planning", () => {
+  const p = tmpPlanning();
+  try {
+    mkdirSync(join(p, "..", "outside"), { recursive: true });
+    mkdirSync(join(p, "workstreams"), { recursive: true });
+    for (const evil of ["../../outside", "../..", "/tmp", "a/../../.."]) {
+      writeFileSync(join(p, "workstreams", ".active"), evil + "\n");
+      assert.equal(activeWorkstream(p), null, `rejects ${evil}`);
+      assert.equal(resolveWorkstreamDir(p), p, `falls back to root .planning for ${evil}`);
+    }
   } finally { rmSync(join(p, ".."), { recursive: true, force: true }); }
 });
 

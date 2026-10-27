@@ -1,5 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 import { branchNameFor, createWorkBranch } from "../src/engine/branch.js";
 import { resolveReviewer, crossAiReview, convergeReview, type ReviewFinding, type Reviewer } from "../src/orchestrate/cross-ai-review.js";
 
@@ -16,6 +20,26 @@ test("branch: createWorkBranch dryRun emits safe argv; none → no-op", () => {
   const r = createWorkBranch("/r", { branching_strategy: "phase" }, "phase", { phase: "2", slug: "x" }, { dryRun: true });
   assert.equal(r.branch, "gsd/phase-2-x");
   assert.deepEqual(r.argv[0], ["switch", "-c", "gsd/phase-2-x", "--", "HEAD"]);
+});
+
+test("branch: REAL createWorkBranch switches back to an EXISTING branch instead of failing to re-create it", () => {
+  const repo = mkdtempSync(join(tmpdir(), "gsd-branch-"));
+  const g = (args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
+  try {
+    g(["init", "-q", "-b", "main"]);
+    g(["config", "user.email", "t@t"]); g(["config", "user.name", "t"]); g(["config", "commit.gpgsign", "false"]);
+    writeFileSync(join(repo, "a.txt"), "a\n"); g(["add", "a.txt"]); g(["commit", "-qm", "base"]);
+    const cfg = { branching_strategy: "phase" };
+    const first = createWorkBranch(repo, cfg, "phase", { phase: "1", slug: "auth" });
+    assert.ok(first.ok, first.error);
+    assert.equal(g(["branch", "--show-current"]), "gsd/phase-1-auth");
+    g(["switch", "-q", "main"]);
+    // re-entering the same phase must SWITCH to the existing branch (pre-fix: `switch -c` → "already exists")
+    const again = createWorkBranch(repo, cfg, "phase", { phase: "1", slug: "auth" });
+    assert.ok(again.ok, again.error);
+    assert.deepEqual(again.argv[0], ["switch", "--", "gsd/phase-1-auth"]);
+    assert.equal(g(["branch", "--show-current"]), "gsd/phase-1-auth");
+  } finally { rmSync(repo, { recursive: true, force: true }); }
 });
 
 test("cross-ai: reviewer resolution (model-ref vs ACP agentId)", () => {

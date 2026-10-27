@@ -24,7 +24,7 @@ git clone https://github.com/kleinpanic/GSD-OC.git
 cd GSD-OC
 npm install
 npm run build      # tsc -> dist/  then  node scripts/copy-artifacts.mjs
-npm test           # tsc -p tsconfig.test.json  then  node --test (342 tests, node:test)
+npm test           # tsc -p tsconfig.test.json  then  node --test (node:test)
 ```
 
 A clean `npm install && npm run build && npm test` is the baseline every change must keep
